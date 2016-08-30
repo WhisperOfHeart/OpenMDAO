@@ -423,6 +423,10 @@ class Problem(object):
     def auto_grouping_try(self):
         """ Auto-grouping """
 
+        temp_atol = self.root.nl_solver.options['atol']
+        temp_rtol = self.root.nl_solver.options['rtol']
+        temp_maxiter = self.root.nl_solver.options['maxiter']
+
         for grp in self.root.subgroups(recurse=True, include_self=True):
             graph = grp._get_sys_graph()
 
@@ -434,18 +438,18 @@ class Problem(object):
                 temp_group.add(j, self.root._subsystems[j], promotes=['*'])
 
             temp_group.nl_solver = Newton()
-            temp_group.nl_solver.options['atol'] = 1e-10
-            temp_group.nl_solver.options['rtol'] = 1e-32
-            temp_group.nl_solver.options['maxiter'] = 10000
+            temp_group.nl_solver.options['atol'] = temp_atol
+            temp_group.nl_solver.options['rtol'] = temp_rtol
+            temp_group.nl_solver.options['maxiter'] = temp_maxiter
             temp_group.ln_solver = DirectSolver()
 
             exec('auto_group%d = temp_group' %(i + 1))
 
         self.root = Group()
         self.root.nl_solver = NLGaussSeidel()
-        self.root.nl_solver.options['atol'] = 2e-10
-        self.root.nl_solver.options['rtol'] = 1e-32
-        self.root.nl_solver.options['maxiter'] = 100
+        self.root.nl_solver.options['atol'] = temp_atol
+        self.root.nl_solver.options['rtol'] = temp_rtol
+        self.root.nl_solver.options['maxiter'] = temp_maxiter
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
             eval('auto_group%d' %(i + 1)), promotes=['*'])
