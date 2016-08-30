@@ -434,16 +434,16 @@ class Problem(object):
                 temp_group.add(j, self.root._subsystems[j], promotes=['*'])
 
             temp_group.nl_solver = Newton()
-            temp_group.nl_solver.options['atol'] = 1e-16
+            temp_group.nl_solver.options['atol'] = 1e-10
             temp_group.nl_solver.options['rtol'] = 1e-32
-            temp_group.nl_solver.options['maxiter'] = 1000
+            temp_group.nl_solver.options['maxiter'] = 10000
             temp_group.ln_solver = DirectSolver()
 
             exec('auto_group%d = temp_group' %(i + 1))
 
         self.root = Group()
         self.root.nl_solver = NLGaussSeidel()
-        self.root.nl_solver.options['atol'] = 1e-16
+        self.root.nl_solver.options['atol'] = 2e-10
         self.root.nl_solver.options['rtol'] = 1e-32
         self.root.nl_solver.options['maxiter'] = 100
         for i in xrange(len(strong)):
