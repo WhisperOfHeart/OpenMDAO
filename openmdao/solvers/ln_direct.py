@@ -230,5 +230,5 @@ class DirectSolver(MultLinearSolver):
                         partials[o_start:o_end, i_start:i_end] = jac[o_var, i_var]
                     else:
                         partials[i_start:i_end, o_start:o_end] = jac[o_var, i_var].T
-
+        # import matplotlib.pyplot as plt; plt.spy(partials); plt.show(); exit()
         return partials

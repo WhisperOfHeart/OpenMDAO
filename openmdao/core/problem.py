@@ -145,6 +145,8 @@ class Problem(object):
 
         self.pathname = ''
 
+        self.auto_not_done = True
+
 
     def __getitem__(self, name):
         """Retrieve unflattened value of named unknown or unconnected
@@ -415,6 +417,29 @@ class Problem(object):
 
         return ubcs, tgts
 
+    def auto_grouping_try(self):
+        """ Auto-grouping """
+
+        for grp in self.root.subgroups(recurse=True, include_self=True):
+            graph = grp._get_sys_graph()
+
+            strong = [s for s in nx.strongly_connected_components(graph)]
+
+        for i in xrange(len(strong)):
+            temp_group = Group()
+            for j in strong[i]:
+                temp.group.add(j, self.root._subsystems[j], promotes=['*'])
+            exec('auto_group%d = temp_group' %(i + 1))
+
+        self.root = Group()
+        for i in xrange(len(strong)):
+            self.root.add('auto_group'+str(i + 1),
+            eval('"auto_group"+str(%d)]' %(i + 1)), promotes=['*'])
+
+        self.auto_not_done = False
+
+
+
     def setup(self, check=True, out_stream=sys.stdout):
         """Performs all setup of vector storage, data transfer, etc.,
         necessary to perform calculations.
@@ -597,6 +622,10 @@ class Problem(object):
         self._probdata.relevance = Relevance(self.root, params_dict,
                                              unknowns_dict, connections,
                                              pois, oois, mode)
+
+        if self.auto_not_done:
+            self.auto_grouping_try()
+            return self.setup(check=check, out_stream=out_stream)
 
         # perform auto ordering
         for s in self.root.subgroups(recurse=True, include_self=True):
