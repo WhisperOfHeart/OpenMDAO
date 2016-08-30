@@ -431,7 +431,8 @@ class Problem(object):
             graph = grp._get_sys_graph()
 
             strong = [s for s in nx.strongly_connected_components(graph)]
-        print("Auto-grouping:")
+        print("##############################################")
+        print("\nAuto-grouping:", len(strong), "group(s) will be created.")
 
         for i in xrange(len(strong)):
             temp_group = Group()
@@ -445,6 +446,7 @@ class Problem(object):
             temp_group.ln_solver = DirectSolver()
             print("Group", 'auto_group%d' %(i + 1), "contains :", strong[i])
             exec('auto_group%d = temp_group' %(i + 1))
+        print()
 
         self.root = Group()
         self.root.nl_solver = NLGaussSeidel()
