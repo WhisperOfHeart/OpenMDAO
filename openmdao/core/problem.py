@@ -30,6 +30,9 @@ from openmdao.components.indep_var_comp import IndepVarComp
 from openmdao.solvers.scipy_gmres import ScipyGMRES
 from openmdao.solvers.ln_direct import DirectSolver
 from openmdao.solvers.ln_gauss_seidel import LinearGaussSeidel
+from openmdao.solvers.newton import Newton
+from openmdao.solvers.ln_direct import DirectSolver
+from openmdao.solvers.nl_gauss_seidel import NLGaussSeidel
 
 from openmdao.units.units import get_conversion_tuple
 from openmdao.util.string_util import get_common_ancestor, nearest_child, name_relative_to
@@ -428,17 +431,24 @@ class Problem(object):
         for i in xrange(len(strong)):
             temp_group = Group()
             for j in strong[i]:
-                temp.group.add(j, self.root._subsystems[j], promotes=['*'])
+                temp_group.add(j, self.root._subsystems[j], promotes=['*'])
+
+            temp_group.nl_solver = Newton()
+            temp_group.nl_solver.options['rtol'] = 1e-16
+            temp_group.nl_solver.options['maxiter'] = 1000
+            temp_group.ln_solver = DirectSolver()
+
             exec('auto_group%d = temp_group' %(i + 1))
 
         self.root = Group()
+        self.root.nl_solver = NLGaussSeidel()
+        self.root.nl_solver.options['rtol'] = 1e-16
+        self.root.nl_solver.options['maxiter'] = 100
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
-            eval('"auto_group"+str(%d)]' %(i + 1)), promotes=['*'])
+            eval('auto_group%d' %(i + 1)), promotes=['*'])
 
         self.auto_not_done = False
-
-
 
     def setup(self, check=True, out_stream=sys.stdout):
         """Performs all setup of vector storage, data transfer, etc.,
