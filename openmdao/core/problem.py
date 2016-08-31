@@ -124,7 +124,7 @@ class Problem(object):
         under MPI. If not specified, the default "COMM_WORLD" will be used.
     """
 
-    def __init__(self, root=None, driver=None, impl=None, comm=None):
+    def __init__(self, root=None, driver=None, impl=None, comm=None, auto_group=False):
         super(Problem, self).__init__()
         self.root = root
         self._probdata = _ProbData()
@@ -148,7 +148,7 @@ class Problem(object):
 
         self.pathname = ''
 
-        self.auto_not_done = True
+        self.auto_not_done = auto_group
 
 
     def __getitem__(self, name):
@@ -427,10 +427,17 @@ class Problem(object):
         temp_rtol = self.root.nl_solver.options['rtol']
         temp_maxiter = self.root.nl_solver.options['maxiter']
 
+        grp_counter = 0
         for grp in self.root.subgroups(recurse=True, include_self=True):
-            graph = grp._get_sys_graph()
 
+            if grp_counter > 0:
+                print("Error: All components",
+                "must be in a single group for auto grouping."); exit()
+            grp_counter += 1
+
+            graph = grp._get_sys_graph()
             strong = [s for s in nx.strongly_connected_components(graph)]
+
         print("##############################################")
         print("\nAuto-grouping:", len(strong), "group(s) will be created.")
 
@@ -440,11 +447,11 @@ class Problem(object):
                 temp_group.add(j, self.root._subsystems[j], promotes=['*'])
 
             temp_group.nl_solver = Newton()
-            temp_group.nl_solver.options['atol'] = temp_atol
+            temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
             temp_group.ln_solver = DirectSolver()
-            print("Group", 'auto_group%d' %(i + 1), "contains :", strong[i])
+            print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
             exec('auto_group%d = temp_group' %(i + 1))
         print()
 
@@ -456,7 +463,7 @@ class Problem(object):
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
             eval('auto_group%d' %(i + 1)), promotes=['*'])
-
+        self.print_all_convergence(level=2)
         self.auto_not_done = False
 
     def setup(self, check=True, out_stream=sys.stdout):
