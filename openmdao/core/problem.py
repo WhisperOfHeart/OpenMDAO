@@ -33,6 +33,7 @@ from openmdao.solvers.ln_gauss_seidel import LinearGaussSeidel
 from openmdao.solvers.newton import Newton
 from openmdao.solvers.ln_direct import DirectSolver
 from openmdao.solvers.nl_gauss_seidel import NLGaussSeidel
+from openmdao.solvers.petsc_ksp import PetscKSP
 
 from openmdao.units.units import get_conversion_tuple
 from openmdao.util.string_util import get_common_ancestor, nearest_child, name_relative_to
@@ -124,7 +125,7 @@ class Problem(object):
         under MPI. If not specified, the default "COMM_WORLD" will be used.
     """
 
-    def __init__(self, root=None, driver=None, impl=None, comm=None, auto_group=False):
+    def __init__(self, root=None, driver=None, impl=None, comm=None, auto_group=False, auto_group_type="Direct"):
         super(Problem, self).__init__()
         self.root = root
         self._probdata = _ProbData()
@@ -149,6 +150,7 @@ class Problem(object):
         self.pathname = ''
 
         self.auto_not_done = auto_group
+        self.auto_group_type = auto_group_type
 
 
     def __getitem__(self, name):
@@ -420,7 +422,7 @@ class Problem(object):
 
         return ubcs, tgts
 
-    def auto_grouping_try(self):
+    def auto_grouping_try_direct(self):
         """ Auto-grouping """
 
         temp_atol = self.root.nl_solver.options['atol']
@@ -451,6 +453,59 @@ class Problem(object):
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
             temp_group.ln_solver = DirectSolver()
+            print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
+            exec('auto_group%d = temp_group' %(i + 1))
+        print()
+
+        self.root = Group()
+        self.root.nl_solver = NLGaussSeidel()
+        self.root.nl_solver.options['atol'] = temp_atol
+        self.root.nl_solver.options['rtol'] = temp_rtol
+        self.root.nl_solver.options['maxiter'] = temp_maxiter
+        for i in xrange(len(strong)):
+            self.root.add('auto_group'+str(i + 1),
+            eval('auto_group%d' %(i + 1)), promotes=['*'])
+        self.print_all_convergence(level=2)
+        self.auto_not_done = False
+
+    def auto_grouping_try_ksp(self):
+        """ Auto-grouping """
+
+        temp_atol = self.root.nl_solver.options['atol']
+        temp_rtol = self.root.nl_solver.options['rtol']
+        temp_maxiter = self.root.nl_solver.options['maxiter']
+
+        grp_counter = 0
+        for grp in self.root.subgroups(recurse=True, include_self=True):
+
+            if grp_counter > 0:
+                print("Error: All components",
+                "must be in a single group for auto grouping."); exit()
+            grp_counter += 1
+
+            graph = grp._get_sys_graph()
+            strong = [s for s in nx.strongly_connected_components(graph)]
+
+        print("##############################################")
+        print("\nAuto-grouping:", len(strong), "group(s) will be created.")
+
+        for i in xrange(len(strong)):
+
+            temp_group = Group()
+            for j in strong[i]:
+                temp_comp_group = Group()
+                temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
+                temp_comp_group.ln_solver = DirectSolver()
+                temp_group.add(j, temp_comp_group, promotes=['*'])
+
+            temp_group.nl_solver = Newton()
+            temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
+            temp_group.nl_solver.options['rtol'] = temp_rtol
+            temp_group.nl_solver.options['maxiter'] = temp_maxiter
+            temp_group.ln_solver = PetscKSP()
+            temp_group.ln_solver.options['maxiter'] = 10000
+            temp_group.ln_solver.preconditioner = LinearGaussSeidel()
+            temp_group.ln_solver.preconditioner.options['maxiter'] = 1
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
             exec('auto_group%d = temp_group' %(i + 1))
         print()
@@ -650,7 +705,11 @@ class Problem(object):
                                              pois, oois, mode)
 
         if self.auto_not_done:
-            self.auto_grouping_try()
+            assert (self.auto_group_type == "KSP" or self.auto_group_type == "Direct")
+            if self.auto_group_type == "Direct":
+                self.auto_grouping_try_direct()
+            elif self.auto_group_type == "KSP":
+                self.auto_grouping_try_ksp()
             return self.setup(check=check, out_stream=out_stream)
 
         # perform auto ordering
