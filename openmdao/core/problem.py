@@ -39,6 +39,7 @@ from openmdao.units.units import get_conversion_tuple
 from openmdao.util.string_util import get_common_ancestor, nearest_child, name_relative_to
 from openmdao.util.graph import plain_bfs
 from openmdao.util.options import OptionsDictionary
+import openmdao.drivers as od
 
 force_check = os.environ.get('OPENMDAO_FORCE_CHECK_SETUP')
 trace = os.environ.get('OPENMDAO_TRACE')
@@ -429,6 +430,20 @@ class Problem(object):
         temp_rtol = self.root.nl_solver.options['rtol']
         temp_maxiter = self.root.nl_solver.options['maxiter']
 
+        temp_driver = None
+        if (isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer) or
+        isinstance(self.driver, od.pyoptsparse_driver.pyOptSparseDriver)):
+
+            temp_driver = self.driver
+            temp_driver_options = self.driver.options['optimizer']
+
+            if isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer):
+                temp_driver_tol = self.driver.options['tol']
+
+            temp_desvars = self.driver._desvars
+            temp_constraints = self.driver._cons
+            temp_obj = self.driver._objs
+
         grp_counter = 0
         for grp in self.root.subgroups(recurse=True, include_self=True):
 
@@ -465,7 +480,20 @@ class Problem(object):
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
             eval('auto_group%d' %(i + 1)), promotes=['*'])
-        self.print_all_convergence(level=2)
+
+        if (isinstance(temp_driver, od.scipy_optimizer.ScipyOptimizer) or
+        isinstance(temp_driver, od.pyoptsparse_driver.pyOptSparseDriver)):
+
+            self.driver = temp_driver
+            self.driver.options['optimizer'] = temp_driver_options
+
+            if isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer):
+                self.driver.options['tol'] = temp_driver_tol
+
+            self.driver._desvars = temp_desvars
+            self.driver._cons = temp_constraints
+            self.driver._objs = temp_obj
+
         self.auto_not_done = False
 
     def auto_grouping_try_ksp(self):
@@ -474,6 +502,21 @@ class Problem(object):
         temp_atol = self.root.nl_solver.options['atol']
         temp_rtol = self.root.nl_solver.options['rtol']
         temp_maxiter = self.root.nl_solver.options['maxiter']
+
+        temp_driver = None
+        if (isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer) or
+        isinstance(self.driver, od.pyoptsparse_driver.pyOptSparseDriver)):
+
+            temp_driver = self.driver
+            temp_driver_options = self.driver.options['optimizer']
+
+            if isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer):
+                temp_driver_tol = self.driver.options['tol']
+
+            temp_desvars = self.driver._desvars
+            temp_constraints = self.driver._cons
+            temp_obj = self.driver._objs
+
 
         grp_counter = 0
         for grp in self.root.subgroups(recurse=True, include_self=True):
@@ -503,6 +546,8 @@ class Problem(object):
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
             temp_group.ln_solver = PetscKSP()
+            # temp_group.ln_solver.options['atol'] = 10e-8
+            # temp_group.ln_solver.options['rtol'] = temp_rtol
             temp_group.ln_solver.options['maxiter'] = 10000
             temp_group.ln_solver.preconditioner = LinearGaussSeidel()
             temp_group.ln_solver.preconditioner.options['maxiter'] = 1
@@ -518,7 +563,20 @@ class Problem(object):
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
             eval('auto_group%d' %(i + 1)), promotes=['*'])
-        self.print_all_convergence(level=2)
+
+        if (isinstance(temp_driver, od.scipy_optimizer.ScipyOptimizer) or
+        isinstance(temp_driver, od.pyoptsparse_driver.pyOptSparseDriver)):
+
+            self.driver = temp_driver
+            self.driver.options['optimizer'] = temp_driver_options
+
+            if isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer):
+                self.driver.options['tol'] = temp_driver_tol
+
+            self.driver._desvars = temp_desvars
+            self.driver._cons = temp_constraints
+            self.driver._objs = temp_obj
+
         self.auto_not_done = False
 
     def setup(self, check=True, out_stream=sys.stdout):
