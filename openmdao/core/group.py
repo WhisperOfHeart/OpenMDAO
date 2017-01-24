@@ -87,6 +87,10 @@ class Group(System):
         self._gs_outputs = None
         self._run_apply = True
 
+        self.delta_n_1 = "None" # Shamsheer Added
+        self.aitken_alfa = .75 # Shamsheer Added
+        # self.do_not_acc = False # Shamsheer Added
+
     def _subsystem(self, name):
         """
         Returns a reference to a named subsystem that is a direct or an indirect
@@ -746,11 +750,91 @@ class Group(System):
         for sub in itervalues(self._subsystems):
             self._transfer_data(sub.name)
             if sub.is_active():
-                with sub._dircontext:
-                    if isinstance(sub, Component):
-                        sub._sys_solve_nonlinear(sub.params, sub.unknowns, sub.resids)
-                    else:
-                        sub.solve_nonlinear(sub.params, sub.unknowns, sub.resids, metadata)
+
+                ################################################################
+                # Start of code added by Shamsheer Chauhan
+                ################################################################
+
+                use_acc = False
+
+                if use_acc:
+
+                    # print("Enter ", sub.pathname)
+                    # print(type(sub))
+
+                    # print("sub.delta_n_1 is", sub.delta_n_1)
+                    if isinstance(sub, Group):
+                        unknowns_cache = np.zeros(sub.unknowns.vec.shape)
+                        unknowns_cache[:] = sub.unknowns.vec
+                    # print("unknowns_cache is", unknowns_cache)
+                    # print("now going to solve")
+
+                    with sub._dircontext: # This was there before
+                        if isinstance(sub, Component):
+                            sub._sys_solve_nonlinear(sub.params, sub.unknowns, sub.resids)
+                        else:
+                            sub.solve_nonlinear(sub.params, sub.unknowns, sub.resids, metadata)
+
+                    # print("new unknowns vec is", sub.unknowns.vec)
+
+                    if isinstance(sub, Group):
+                        if type(sub.delta_n_1) is not str:
+
+                            # Method 1 used by kenway et al.
+                            delta_n = sub.unknowns.vec - unknowns_cache
+                            print("delta_n norm is ", np.linalg.norm(delta_n))
+                            delta_n_1 = sub.delta_n_1 #unknowns_cache - sub.delta_n_1
+                            print("delta_n_1 norm is ", np.linalg.norm(delta_n_1))
+                            sub.aitken_alfa = sub.aitken_alfa * (1. - np.dot(( delta_n  - delta_n_1), delta_n) / np.linalg.norm(( delta_n  - delta_n_1), 2)**2)
+                            sub.aitken_alfa = max(0.5, min(1.25, sub.aitken_alfa))
+                            # if sub.do_not_acc:
+                            #     sub.aitken_alfa = 1.0
+
+                            print("Aitken alfa is", sub.aitken_alfa)
+                            print("This is for" , sub.pathname)
+                            sub.delta_n_1 = delta_n.copy()
+                            sub.unknowns.vec[:] = unknowns_cache + sub.aitken_alfa * delta_n
+
+                            # # Method 2 used for symm iteration matrix
+                            # term_1 = sub.delta_n_1
+                            # term_2 = unknowns_cache - sub.unknowns.vec
+                            # term_3 = term_1 - term_2
+                            #
+                            # sub.aitken_alfa = np.dot(term_1, term_2) / np.dot(term_1, term_3)
+                            # print("Aitken alfa is", sub.aitken_alfa)
+                            # sub.aitken_alfa = max(-3.0, min(3.0, sub.aitken_alfa))
+                            #
+                            # sub.delta_n_1 = term_2.copy()
+                            # sub.unknowns.vec[:] = sub.unknowns.vec - sub.aitken_alfa * term_2
+
+                            # # Simple constant relaxation
+                            # al = 1.3
+                            # sub.unknowns.vec[:] = (1-al)*unknowns_cache + al*sub.unknowns.vec # Relaxation
+
+                            # print("modified unknowns vec is", sub.unknowns.vec)
+                        else:
+                            # print("First iter")
+                            sub.delta_n_1 = sub.unknowns.vec - unknowns_cache # Method 2 used by kenway et al.
+                            # sub.delta_n_1 = unknowns_cache - sub.unknowns.vec # Method 1 used for symm iteration matrix
+
+
+                    # elif isinstance(sub, Component):
+                    #     print("in component")
+                    # print(" ")
+                    # print("Exit ", sub.pathname)
+                    # print(" ")
+
+                ################################################################
+                # End of code added by Shamsheer Chauhan
+                ################################################################
+
+                else:
+                    with sub._dircontext:
+                        if isinstance(sub, Component):
+                            sub._sys_solve_nonlinear(sub.params, sub.unknowns, sub.resids)
+                        else:
+                            sub.solve_nonlinear(sub.params, sub.unknowns, sub.resids, metadata)
+
 
     def _sys_apply_nonlinear(self, params, unknowns, resids, metadata=None):
         """

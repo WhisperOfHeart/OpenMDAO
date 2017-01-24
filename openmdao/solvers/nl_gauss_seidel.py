@@ -17,6 +17,8 @@ class NLGaussSeidel(NonLinearSolver):
 
     Options
     -------
+    options['alpha'] :  float(1.0)
+        Relaxation factor.
     options['atol'] :  float(1e-06)
         Absolute convergence tolerance.
     options['err_on_maxiter'] : bool(False)
@@ -45,8 +47,12 @@ class NLGaussSeidel(NonLinearSolver):
                        desc='Convergence tolerance on the change in the unknowns.')
         opt.add_option('maxiter', 100, lower=0,
                        desc='Maximum number of iterations.')
+        opt.add_option('alpha', 1.0,
+                       desc='Over-relaxation factor.') # Shamsheer Added
 
         self.print_name = 'NLN_GS'
+        self.delta_n_1 = "None" # Shamsheer Added
+        self.aitken_alfa = .75 # Shamsheer Added
 
     def setup(self, sub):
         """ Initialize this solver.
@@ -85,6 +91,7 @@ class NLGaussSeidel(NonLinearSolver):
         utol = self.options['utol']
         maxiter = self.options['maxiter']
         iprint = self.options['iprint']
+        alpha = self.options['alpha']
         unknowns_cache = self.unknowns_cache
 
         # Initial run
@@ -106,6 +113,8 @@ class NLGaussSeidel(NonLinearSolver):
 
         resids = system.resids
         unknowns_cache = np.zeros(unknowns.vec.shape)
+        unknowns_cache[:] = unknowns.vec
+
 
         # Evaluate Norm
         system.apply_nonlinear(params, unknowns, resids)
@@ -124,16 +133,63 @@ class NLGaussSeidel(NonLinearSolver):
             # Metadata update
             self.iter_count += 1
             update_local_meta(local_meta, (self.iter_count,))
-            unknowns_cache[:] = unknowns.vec
 
-            # Runs an iteration
-            system.children_solve_nonlinear(local_meta)
-            self.recorders.record_iteration(system, local_meta)
+            ################################################################
+            # Start of code added by Shamsheer Chauhan
+            ################################################################
+
+            use_acc = True
+
+            if use_acc:
+                unknowns_cache[:] = unknowns.vec
+
+                # Runs an iteration
+                system.children_solve_nonlinear(local_meta)
+                self.recorders.record_iteration(system, local_meta)
+
+                # print("new unknowns vec is", unknowns.vec)
+
+                if type(self.delta_n_1) is not str:
+
+                    # Method 1 used by kenway et al.
+                    delta_n = unknowns.vec - unknowns_cache
+                    print("delta_n norm is ", np.linalg.norm(delta_n))
+                    delta_n_1 = self.delta_n_1
+                    print("delta_n_1 norm is ", np.linalg.norm(delta_n_1))
+                    self.aitken_alfa = self.aitken_alfa * (1. - np.dot(( delta_n  - delta_n_1), delta_n) / np.linalg.norm(( delta_n  - delta_n_1), 2)**2)
+                    self.aitken_alfa = max(0.5, min(1.25, self.aitken_alfa))
+
+                    print("Aitken alfa is", self.aitken_alfa)
+
+                    self.delta_n_1 = delta_n.copy()
+                    unknowns.vec[:] = unknowns_cache + self.aitken_alfa * delta_n
+                    # print("relaxed unknowns vec is", unknowns.vec)
+
+                    # Simple relaxation
+                    # unknowns.vec[:] = (1-alpha)*unknowns_cache + alpha*unknowns.vec # Relaxation
+                    # unknowns_cache[:] = unknowns.vec
+
+                else:
+                    # print("First iter")
+                    self.delta_n_1 = unknowns.vec - unknowns_cache # Method 2 used by kenway et al.
+
+
+            ################################################################
+            # End of code added by Shamsheer Chauhan
+            ################################################################
+
+            else:
+                # Runs an iteration
+                system.children_solve_nonlinear(local_meta)
+                self.recorders.record_iteration(system, local_meta)
+
 
             # Evaluate Norm
             system.apply_nonlinear(params, unknowns, resids)
             normval = resids.norm()
             u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
+
+            u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
 
             if self.options['iprint'] == 2:
                 self.print_norm(self.print_name, system.pathname, self.iter_count, normval,
