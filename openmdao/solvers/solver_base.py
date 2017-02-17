@@ -158,12 +158,21 @@ class SolverBase(object):
             print(form % (name, solver, solver_string, iteration, msg))
             return
 
-        form = indent + '[%s] %s: %s   %d | %.9g %.9g'
+        ####################################################################
+        # Shamsheer Chauhan Custom edits starts here
+        ####################################################################
+        #form = indent + '[%s] %s: %s   %d | %.9g %.9g'
+        form = indent + '[%s] %s: %s   %d | %.9g'
 
         if u_norm:
             form += ' (%s)' % u_norm
 
-        print(form % (name, solver, solver_string, iteration, res, res/res0))
+        #print(form % (name, solver, solver_string, iteration, res, res/res0))
+        print(form % (name, solver, solver_string, iteration, res))
+
+        ####################################################################
+        # Shamsheer Chauhan Custom edits end here
+        ####################################################################
 
     def print_all_convergence(self, level=2):
         """ Turns on iprint for this solver and all subsolvers. Override if
