@@ -146,10 +146,17 @@ class NLGaussSeidel(NonLinearSolver):
                 # Runs an iteration
                 system.children_solve_nonlinear(local_meta)
                 self.recorders.record_iteration(system, local_meta)
+                
+                # Evaluate Norm
+                system.apply_nonlinear(params, unknowns, resids)
+                normval = resids.norm()
+                u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
+
+                u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
 
                 # print("new unknowns vec is", unknowns.vec)
 
-                if type(self.delta_n_1) is not str:
+                if ((type(self.delta_n_1) is not str) and normval > atol):
 
                     # Method 1 used by kenway et al.
                     delta_n = unknowns.vec - unknowns_cache
@@ -157,7 +164,7 @@ class NLGaussSeidel(NonLinearSolver):
                     delta_n_1 = self.delta_n_1
                     print("delta_n_1 norm is ", np.linalg.norm(delta_n_1))
                     self.aitken_alfa = self.aitken_alfa * (1. - np.dot(( delta_n  - delta_n_1), delta_n) / np.linalg.norm(( delta_n  - delta_n_1), 2)**2)
-                    self.aitken_alfa = max(0.5, min(1.25, self.aitken_alfa))
+                    self.aitken_alfa = max(0.25, min(2.0, self.aitken_alfa))
 
                     print("Aitken alfa is", self.aitken_alfa)
 
@@ -184,12 +191,12 @@ class NLGaussSeidel(NonLinearSolver):
                 self.recorders.record_iteration(system, local_meta)
 
 
-            # Evaluate Norm
-            system.apply_nonlinear(params, unknowns, resids)
-            normval = resids.norm()
-            u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
+                # Evaluate Norm
+                system.apply_nonlinear(params, unknowns, resids)
+                normval = resids.norm()
+                u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
 
-            u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
+                u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
 
             if self.options['iprint'] == 2:
                 self.print_norm(self.print_name, system.pathname, self.iter_count, normval,

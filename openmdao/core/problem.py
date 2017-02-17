@@ -469,6 +469,7 @@ class Problem(object):
             grp_counter += 1
 
             graph = grp._get_sys_graph()
+            no_of_components = nx.number_of_nodes(graph)
             strong = [s for s in nx.strongly_connected_components(graph)]
 
         print("##############################################")
@@ -480,7 +481,7 @@ class Problem(object):
                 temp_group.add(j, self.root._subsystems[j], promotes=['*'])
 
             temp_group.nl_solver = Newton()
-            temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
+            temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
             temp_group.ln_solver = DirectSolver()
@@ -543,6 +544,7 @@ class Problem(object):
             grp_counter += 1
 
             graph = grp._get_sys_graph()
+            no_of_components = nx.number_of_nodes(graph)
             strong = [s for s in nx.strongly_connected_components(graph)]
 
         print("##############################################")
@@ -558,13 +560,14 @@ class Problem(object):
                 temp_group.add(j, temp_comp_group, promotes=['*'])
 
             temp_group.nl_solver = Newton()
-            temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
+            # temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
+            temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
             temp_group.ln_solver = PetscKSP()
             # temp_group.ln_solver.options['atol'] = 10e-8
             # temp_group.ln_solver.options['rtol'] = temp_rtol
-            # temp_group.ln_solver.options['maxiter'] = 100
+            temp_group.ln_solver.options['maxiter'] = temp_maxiter
             temp_group.ln_solver.preconditioner = LinearGaussSeidel()
             temp_group.ln_solver.preconditioner.options['maxiter'] = 1
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
@@ -626,6 +629,7 @@ class Problem(object):
             grp_counter += 1
 
             graph = grp._get_sys_graph()
+            no_of_components = nx.number_of_nodes(graph)
             strong = [s for s in nx.strongly_connected_components(graph)]
 
         print("##############################################")
@@ -639,13 +643,15 @@ class Problem(object):
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
                 temp_comp_group.ln_solver = DirectSolver()
                 temp_comp_group.nl_solver = Newton()
-                temp_comp_group.nl_solver.options['atol'] = temp_atol/(len(strong))
+                # temp_comp_group.nl_solver.options['atol'] = temp_atol/(len(strong))
+                temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
                 temp_comp_group.nl_solver.options['rtol'] = temp_rtol
                 temp_comp_group.nl_solver.options['maxiter'] = 100
                 temp_group.add(j, temp_comp_group, promotes=['*'])
 
             temp_group.nl_solver = NLGaussSeidel()
-            temp_group.nl_solver.options['atol'] = temp_atol*(len(strong))
+            # temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
+            temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
             temp_group.nl_solver.options['alpha'] = temp_alpha
