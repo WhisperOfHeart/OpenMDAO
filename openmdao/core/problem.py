@@ -620,7 +620,9 @@ class Problem(object):
         temp_atol = self.root.nl_solver.options['atol']
         temp_rtol = self.root.nl_solver.options['rtol']
         temp_maxiter = self.root.nl_solver.options['maxiter']
-        # temp_alpha = self.root.nl_solver.options['alpha']
+        temp_aitken_option = self.root.nl_solver.options['use_aitken']
+        temp_aitken_min = self.root.nl_solver.options['aitken_alpha_min']
+        temp_aitken_max = self.root.nl_solver.options['aitken_alpha_max']
 
         temp_driver = None
         if (isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer) or
@@ -670,7 +672,9 @@ class Problem(object):
             temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
-            # temp_group.nl_solver.options['alpha'] = temp_alpha
+            temp_group.nl_solver.options['use_aitken'] = temp_aitken_option
+            temp_group.nl_solver.options['aitken_alpha_min'] = temp_aitken_min
+            temp_group.nl_solver.options['aitken_alpha_max'] = temp_aitken_max
             temp_group.ln_solver.options['maxiter'] = temp_maxiter
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
             exec('auto_group%d = temp_group' %(i + 1))
