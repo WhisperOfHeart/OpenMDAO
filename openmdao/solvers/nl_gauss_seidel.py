@@ -32,6 +32,13 @@ class NLGaussSeidel(NonLinearSolver):
         Relative convergence tolerance.
     options['utol'] :  float(1e-12)
         Convergence tolerance on the change in the unknowns.
+    # Shamsheer added following options
+    options['use_aitken'] : bool(False) 
+        Set to True to use Aitken acceleration.
+    options['aitken_alpha_min'] : float(0.25)
+        Lower limit for Aitken relaxation factor.
+    options['aitken_alpha_max'] : float(2.0)
+        Upper limit for Aitken relaxation factor.
 
     """
 
@@ -47,12 +54,18 @@ class NLGaussSeidel(NonLinearSolver):
                        desc='Convergence tolerance on the change in the unknowns.')
         opt.add_option('maxiter', 100, lower=0,
                        desc='Maximum number of iterations.')
-        opt.add_option('alpha', 1.0,
-                       desc='Over-relaxation factor.') # Shamsheer Added
+        # Shamsheer added following options
+        opt.add_option('use_aitken', False,
+                       desc='Set to True to use Aitken acceleration.')
+        opt.add_option('aitken_alpha_min', 0.25,
+                       desc='Lower limit for Aitken relaxation factor.')
+        opt.add_option('aitken_alpha_max', 2.0,
+                       desc='Upper limit for Aitken relaxation factor.') 
 
         self.print_name = 'NLN_GS'
-        self.delta_n_1 = "None" # Shamsheer Added
-        self.aitken_alfa = .75 # Shamsheer Added
+        # Shamsheer added following variables
+        self.delta_u_n_1 = 'None' # delta_u_n-1 for Aitken acc.
+        self.aitken_alpha = 0.75 # Initial Aitken relaxation factor 
 
     def setup(self, sub):
         """ Initialize this solver.
@@ -91,7 +104,6 @@ class NLGaussSeidel(NonLinearSolver):
         utol = self.options['utol']
         maxiter = self.options['maxiter']
         iprint = self.options['iprint']
-        alpha = self.options['alpha']
         unknowns_cache = self.unknowns_cache
 
         # Initial run
@@ -133,70 +145,62 @@ class NLGaussSeidel(NonLinearSolver):
             # Metadata update
             self.iter_count += 1
             update_local_meta(local_meta, (self.iter_count,))
+            unknowns_cache[:] = unknowns.vec
+            
+            # Runs an iteration
+            system.children_solve_nonlinear(local_meta)
+            self.recorders.record_iteration(system, local_meta)
+            
+            # Evaluate Norm
+            system.apply_nonlinear(params, unknowns, resids)
+            normval = resids.norm()
+            u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
 
             ################################################################
             # Start of code added by Shamsheer Chauhan
             ################################################################
 
-            use_acc = True
+            u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
 
-            if use_acc:
-                unknowns_cache[:] = unknowns.vec
-
-                # Runs an iteration
-                system.children_solve_nonlinear(local_meta)
-                self.recorders.record_iteration(system, local_meta)
+            if self.options['use_aitken']: # If Aitken acceleration is enabled
                 
-                # Evaluate Norm
-                system.apply_nonlinear(params, unknowns, resids)
-                normval = resids.norm()
-                u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
+                # This method is used by Kenway et al. in "Scalable Parallel  
+                # Approach for High-Fidelity Steady-State Aeroelastic Analysis 
+                # and Adjoint Derivative Computations" (line 22 of Algorithm 1)
+                # It is based on "A version of the Aitken accelerator for 
+                # computer iteration" by Irons et al. 
+            
+                # Use relaxation after second iteration
+                # self.delta_u_n_1 is a string for the first iteration
+                if (type(self.delta_u_n_1) is not str) and \
+                    normval > atol and \
+                    normval/basenorm > rtol  and \
+                    u_norm > utol:
 
-                u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
+                    delta_u_n = unknowns.vec - unknowns_cache
+                    delta_u_n_1 = self.delta_u_n_1
 
-                # print("new unknowns vec is", unknowns.vec)
+                    # Compute relaxation factor 
+                    self.aitken_alpha = self.aitken_alpha * \
+                        (1. - np.dot((delta_u_n  - delta_u_n_1), delta_u_n) \
+                        / np.linalg.norm((delta_u_n  - delta_u_n_1), 2)**2)
 
-                if ((type(self.delta_n_1) is not str) and normval > atol):
+                    # Limit relaxation factor to desired range
+                    self.aitken_alpha = max(self.options['aitken_alpha_min'], 
+                        min(self.options['aitken_alpha_max'], self.aitken_alpha))
 
-                    # Method 1 used by kenway et al.
-                    delta_n = unknowns.vec - unknowns_cache
-                    print("delta_n norm is ", np.linalg.norm(delta_n))
-                    delta_n_1 = self.delta_n_1
-                    print("delta_n_1 norm is ", np.linalg.norm(delta_n_1))
-                    self.aitken_alfa = self.aitken_alfa * (1. - np.dot(( delta_n  - delta_n_1), delta_n) / np.linalg.norm(( delta_n  - delta_n_1), 2)**2)
-                    self.aitken_alfa = max(0.25, min(2.0, self.aitken_alfa))
+                    if iprint == 1 or iprint == 2:
+                        print("Aitken relaxation factor is", self.aitken_alpha)
 
-                    print("Aitken alfa is", self.aitken_alfa)
+                    self.delta_u_n_1 = delta_u_n.copy()
 
-                    self.delta_n_1 = delta_n.copy()
-                    unknowns.vec[:] = unknowns_cache + self.aitken_alfa * delta_n
-                    # print("relaxed unknowns vec is", unknowns.vec)
+                    # Update unknowns vector
+                    unknowns.vec[:] = unknowns_cache + self.aitken_alpha * delta_u_n
 
-                    # Simple relaxation
-                    # unknowns.vec[:] = (1-alpha)*unknowns_cache + alpha*unknowns.vec # Relaxation
-                    # unknowns_cache[:] = unknowns.vec
-
-                else:
-                    # print("First iter")
-                    self.delta_n_1 = unknowns.vec - unknowns_cache # Method 2 used by kenway et al.
-
-
-            ################################################################
-            # End of code added by Shamsheer Chauhan
-            ################################################################
-
-            else:
-                # Runs an iteration
-                system.children_solve_nonlinear(local_meta)
-                self.recorders.record_iteration(system, local_meta)
-
-
-                # Evaluate Norm
-                system.apply_nonlinear(params, unknowns, resids)
-                normval = resids.norm()
-                u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
-
-                u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
+                elif (type(self.delta_u_n_1) is str): # For the first iteration
+                    # Initially self.delta_u_n_1 is a string then it is replaced
+                    # by the following vector
+                    self.delta_u_n_1 = unknowns.vec - unknowns_cache 
 
             if self.options['iprint'] == 2:
                 self.print_norm(self.print_name, system.pathname, self.iter_count, normval,
