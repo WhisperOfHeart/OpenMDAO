@@ -33,7 +33,9 @@ from openmdao.solvers.ln_gauss_seidel import LinearGaussSeidel
 from openmdao.solvers.newton import Newton # Shamsheer added
 from openmdao.solvers.nl_gauss_seidel import NLGaussSeidel # Shamsheer added
 from openmdao.solvers.petsc_ksp import PetscKSP # Shamsheer added
+from openmdao.solvers.run_once import RunOnce # Shamsheer added
 import openmdao.drivers as od # Shamsheer added
+from openmdao.solvers.gs_newton import HybridGSNewton # Shamsheer added
 
 from openmdao.units.units import get_conversion_tuple
 from openmdao.util.string_util import get_common_ancestor, nearest_child, name_relative_to
@@ -497,6 +499,7 @@ class Problem(object):
                 temp_group.add(j, self.root._subsystems[j], promotes=['*'])
 
             temp_group.nl_solver = Newton()
+            temp_group.nl_solver.options['solve_subsystems'] = False
             temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
@@ -509,7 +512,7 @@ class Problem(object):
         self.root.nl_solver = NLGaussSeidel()
         self.root.nl_solver.options['atol'] = temp_atol
         self.root.nl_solver.options['rtol'] = temp_rtol
-        self.root.nl_solver.options['maxiter'] = temp_maxiter
+        self.root.nl_solver.options['maxiter'] = 2
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
             eval('auto_group%d' %(i + 1)), promotes=['*'])
@@ -576,7 +579,7 @@ class Problem(object):
                 temp_group.add(j, temp_comp_group, promotes=['*'])
 
             temp_group.nl_solver = Newton()
-            # temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
+            temp_group.nl_solver.options['solve_subsystems'] = False
             temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
@@ -594,7 +597,7 @@ class Problem(object):
         self.root.nl_solver = NLGaussSeidel()
         self.root.nl_solver.options['atol'] = temp_atol
         self.root.nl_solver.options['rtol'] = temp_rtol
-        self.root.nl_solver.options['maxiter'] = temp_maxiter
+        self.root.nl_solver.options['maxiter'] = 2
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
             eval('auto_group%d' %(i + 1)), promotes=['*'])
@@ -660,11 +663,14 @@ class Problem(object):
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
                 temp_comp_group.ln_solver = DirectSolver()
-                temp_comp_group.nl_solver = Newton()
-                # temp_comp_group.nl_solver.options['atol'] = temp_atol/(len(strong))
-                temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
-                temp_comp_group.nl_solver.options['rtol'] = temp_rtol
-                temp_comp_group.nl_solver.options['maxiter'] = 100
+                if self.root._subsystems[j].d_poly == 1:
+                    temp_comp_group.nl_solver = RunOnce()
+                else:
+                    temp_comp_group.nl_solver = Newton()
+                    temp_comp_group.nl_solver.options['solve_subsystems'] = False
+                    temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
+                    temp_comp_group.nl_solver.options['rtol'] = temp_rtol
+                    temp_comp_group.nl_solver.options['maxiter'] = 100
                 temp_group.add(j, temp_comp_group, promotes=['*'])
 
             temp_group.nl_solver = NLGaussSeidel()
@@ -684,7 +690,7 @@ class Problem(object):
         self.root.nl_solver = NLGaussSeidel()
         self.root.nl_solver.options['atol'] = temp_atol
         self.root.nl_solver.options['rtol'] = temp_rtol
-        self.root.nl_solver.options['maxiter'] = temp_maxiter
+        self.root.nl_solver.options['maxiter'] = 2
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
             eval('auto_group%d' %(i + 1)), promotes=['*'])
@@ -703,6 +709,199 @@ class Problem(object):
             self.driver._objs = temp_obj
 
         self.auto_not_done = False
+
+    def auto_grouping_try_hybrid(self):
+        """ Auto-grouping """
+
+        temp_atol = self.root.nl_solver.options['atol']
+        temp_rtol = self.root.nl_solver.options['rtol']
+        temp_maxiter = self.root.nl_solver.options['maxiter']
+        temp_aitken_option = self.root.nl_solver.options['use_aitken']
+        temp_aitken_min = self.root.nl_solver.options['aitken_alpha_min']
+        temp_aitken_max = self.root.nl_solver.options['aitken_alpha_max']
+
+        temp_driver = None
+        if (isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer) or
+        isinstance(self.driver, od.pyoptsparse_driver.pyOptSparseDriver)):
+
+            temp_driver = self.driver
+            temp_driver_options = self.driver.options['optimizer']
+
+            if isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer):
+                temp_driver_tol = self.driver.options['tol']
+
+            temp_desvars = self.driver._desvars
+            temp_constraints = self.driver._cons
+            temp_obj = self.driver._objs
+
+        grp_counter = 0
+        for grp in self.root.subgroups(recurse=True, include_self=True):
+
+            if grp_counter > 0:
+                print("Error: All components",
+                "must be in a single group for auto grouping."); exit()
+            grp_counter += 1
+
+            graph = grp._get_sys_graph()
+            no_of_components = nx.number_of_nodes(graph)
+            strong = [s for s in nx.strongly_connected_components(graph)]
+
+        print("##############################################")
+        print("\nAuto-grouping:", len(strong), "group(s) will be created.")
+
+        for i in xrange(len(strong)):
+
+            temp_group = Group()
+            for j in strong[i]:
+                temp_comp_group = Group()
+                temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
+                temp_comp_group.ln_solver = DirectSolver()
+                temp_comp_group.nl_solver = Newton()
+                temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
+                temp_comp_group.nl_solver.options['rtol'] = temp_rtol
+                temp_comp_group.nl_solver.options['maxiter'] = 100
+                temp_group.add(j, temp_comp_group, promotes=['*'])
+
+            temp_group.nl_solver = HybridGSNewton()
+            temp_group.nl_solver.nlgs.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.nlgs.options['rtol'] = temp_rtol
+            temp_group.nl_solver.nlgs.options['maxiter'] = 4
+            temp_group.nl_solver.nlgs.options['use_aitken'] = temp_aitken_option
+            temp_group.nl_solver.nlgs.options['aitken_alpha_min'] = temp_aitken_min
+            temp_group.nl_solver.nlgs.options['aitken_alpha_max'] = temp_aitken_max
+            temp_group.nl_solver.newton.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.newton.options['rtol'] = temp_rtol
+            temp_group.nl_solver.newton.options['maxiter'] = temp_maxiter
+            
+            temp_group.ln_solver = PetscKSP()
+            # temp_group.ln_solver.options['atol'] = 10e-8
+            # temp_group.ln_solver.options['rtol'] = temp_rtol
+            temp_group.ln_solver.options['maxiter'] = temp_maxiter
+            temp_group.ln_solver.preconditioner = LinearGaussSeidel()
+            temp_group.ln_solver.preconditioner.options['maxiter'] = 1
+            
+            # temp_group.ln_solver.options['maxiter'] = temp_maxiter
+            print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
+            exec('auto_group%d = temp_group' %(i + 1))
+        print()
+
+        self.root = Group()
+        self.root.nl_solver = NLGaussSeidel()
+        self.root.nl_solver.options['atol'] = temp_atol
+        self.root.nl_solver.options['rtol'] = temp_rtol
+        self.root.nl_solver.options['maxiter'] = 2
+        for i in xrange(len(strong)):
+            self.root.add('auto_group'+str(i + 1),
+            eval('auto_group%d' %(i + 1)), promotes=['*'])
+
+        if (isinstance(temp_driver, od.scipy_optimizer.ScipyOptimizer) or
+        isinstance(temp_driver, od.pyoptsparse_driver.pyOptSparseDriver)):
+
+            self.driver = temp_driver
+            self.driver.options['optimizer'] = temp_driver_options
+
+            if isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer):
+                self.driver.options['tol'] = temp_driver_tol
+
+            self.driver._desvars = temp_desvars
+            self.driver._cons = temp_constraints
+            self.driver._objs = temp_obj
+
+        self.auto_not_done = False
+
+    def auto_grouping_try_hybrid_alternate(self):
+        """ Auto-grouping """
+
+        temp_atol = self.root.nl_solver.options['atol']
+        temp_rtol = self.root.nl_solver.options['rtol']
+        temp_maxiter = self.root.nl_solver.options['maxiter']
+
+        temp_driver = None
+        if (isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer) or
+        isinstance(self.driver, od.pyoptsparse_driver.pyOptSparseDriver)):
+
+            temp_driver = self.driver
+            temp_driver_options = self.driver.options['optimizer']
+
+            if isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer):
+                temp_driver_tol = self.driver.options['tol']
+
+            temp_desvars = self.driver._desvars
+            temp_constraints = self.driver._cons
+            temp_obj = self.driver._objs
+
+
+        grp_counter = 0
+        for grp in self.root.subgroups(recurse=True, include_self=True):
+
+            if grp_counter > 0:
+                print("Error: All components",
+                "must be in a single group for auto grouping."); exit()
+            grp_counter += 1
+
+            graph = grp._get_sys_graph()
+            no_of_components = nx.number_of_nodes(graph)
+            strong = [s for s in nx.strongly_connected_components(graph)]
+
+        print("##############################################")
+        print("\nAuto-grouping:", len(strong), "group(s) will be created.")
+
+        for i in xrange(len(strong)):
+
+            temp_group = Group()
+            for j in strong[i]:
+                temp_comp_group = Group()
+                temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
+                temp_comp_group.ln_solver = DirectSolver()
+                if self.root._subsystems[j].d_poly == 1:
+                    temp_comp_group.nl_solver = RunOnce()
+                else:
+                    temp_comp_group.nl_solver = Newton()
+                    temp_comp_group.nl_solver.options['solve_subsystems'] = False
+                    temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
+                    temp_comp_group.nl_solver.options['rtol'] = temp_rtol
+                    temp_comp_group.nl_solver.options['maxiter'] = 100
+                temp_group.add(j, temp_comp_group, promotes=['*'])
+
+            temp_group.nl_solver = Newton()
+            temp_group.nl_solver.options['solve_subsystems'] = True
+            temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.options['rtol'] = temp_rtol
+            temp_group.nl_solver.options['maxiter'] = temp_maxiter
+            temp_group.ln_solver = PetscKSP()
+            # temp_group.ln_solver.options['atol'] = 10e-8
+            # temp_group.ln_solver.options['rtol'] = temp_rtol
+            temp_group.ln_solver.options['maxiter'] = temp_maxiter
+            temp_group.ln_solver.preconditioner = LinearGaussSeidel()
+            temp_group.ln_solver.preconditioner.options['maxiter'] = 1
+            print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
+            exec('auto_group%d = temp_group' %(i + 1))
+        print()
+
+        self.root = Group()
+        self.root.nl_solver = NLGaussSeidel()
+        self.root.nl_solver.options['atol'] = temp_atol
+        self.root.nl_solver.options['rtol'] = temp_rtol
+        self.root.nl_solver.options['maxiter'] = 2
+        for i in xrange(len(strong)):
+            self.root.add('auto_group'+str(i + 1),
+            eval('auto_group%d' %(i + 1)), promotes=['*'])
+
+        if (isinstance(temp_driver, od.scipy_optimizer.ScipyOptimizer) or
+        isinstance(temp_driver, od.pyoptsparse_driver.pyOptSparseDriver)):
+
+            self.driver = temp_driver
+            self.driver.options['optimizer'] = temp_driver_options
+
+            if isinstance(self.driver, od.scipy_optimizer.ScipyOptimizer):
+                self.driver.options['tol'] = temp_driver_tol
+
+            self.driver._desvars = temp_desvars
+            self.driver._cons = temp_constraints
+            self.driver._objs = temp_obj
+
+        self.auto_not_done = False
+
 
     ###########################################################################
     # Shamsheer Chauhan Custom code ends here
@@ -883,13 +1082,17 @@ class Problem(object):
         # Shamsheer Chauhan Custom code starts here
         #######################################################################
         if self.auto_not_done:
-            assert (self.auto_group_type == "KSP" or self.auto_group_type == "Direct" or self.auto_group_type == "GS")
+            assert (self.auto_group_type == "KSP" or self.auto_group_type == "Direct" or self.auto_group_type == "GS" or self.auto_group_type == "hybrid" or self.auto_group_type == "hybrid_alternate")
             if self.auto_group_type == "Direct":
                 self.auto_grouping_try_direct()
             elif self.auto_group_type == "KSP":
                 self.auto_grouping_try_ksp()
             elif self.auto_group_type == "GS":
                 self.auto_grouping_try_GS()
+            elif self.auto_group_type == "hybrid":
+                self.auto_grouping_try_hybrid()
+            elif self.auto_group_type == "hybrid_alternate":
+                self.auto_grouping_try_hybrid_alternate()
             return self.setup(check=check, out_stream=out_stream)
         #######################################################################
         # Shamsheer Chauhan Custom code ends here

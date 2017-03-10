@@ -90,6 +90,7 @@ class Group(System):
         self._icache = {}
         self.delta_n_1 = "None" # Shamsheer Added
         self.aitken_alfa = .75 # Shamsheer Added
+        self.use_aitken = False # Shamsheer Added
 
     def find_subsystem(self, name):
         """
@@ -759,7 +760,7 @@ class Group(System):
                 # Start of code added by Shamsheer Chauhan
                 ################################################################
 
-                use_acc = False
+                use_acc = self.use_aitken
 
                 if use_acc:
 
@@ -791,7 +792,7 @@ class Group(System):
                             delta_n_1 = sub.delta_n_1 #unknowns_cache - sub.delta_n_1
                             print("delta_n_1 norm is ", np.linalg.norm(delta_n_1))
                             sub.aitken_alfa = sub.aitken_alfa * (1. - np.dot(( delta_n  - delta_n_1), delta_n) / np.linalg.norm(( delta_n  - delta_n_1), 2)**2)
-                            sub.aitken_alfa = max(0.25, min(1.5, sub.aitken_alfa))
+                            sub.aitken_alfa = max(0.1, min(0.5, sub.aitken_alfa))
                             # if sub.do_not_acc:
                             #     sub.aitken_alfa = 1.0
 
