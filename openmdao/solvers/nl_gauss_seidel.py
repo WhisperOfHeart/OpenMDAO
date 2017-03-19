@@ -138,7 +138,8 @@ class NLGaussSeidel(NonLinearSolver):
         while self.iter_count < maxiter and \
                 normval > atol and \
                 normval/basenorm > rtol  and \
-                u_norm > utol:
+                u_norm > utol and \
+                normval < 1e13:
 
             # Metadata update
             self.iter_count += 1
@@ -158,7 +159,7 @@ class NLGaussSeidel(NonLinearSolver):
             # Start of code added by Shamsheer Chauhan
             ################################################################
 
-            u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
+            # u_norm = 100 ### !!!!!!!!! Shamsheer HARD CODED u_norm !!!!!!!!!!!
 
             if self.options['use_aitken']: # If Aitken acceleration is enabled
                 
@@ -214,9 +215,11 @@ class NLGaussSeidel(NonLinearSolver):
             self.print_norm(self.print_name, system, self.iter_count, normval,
                             basenorm, u_norm=u_norm)
 
-        if self.iter_count >= maxiter or isnan(normval):
+        if self.iter_count >= maxiter or isnan(normval) or normval >= 1e13:
             msg = 'FAILED to converge after %d iterations' % self.iter_count
             fail = True
+            if normval >= 1e13:
+                exit()
         else:
             fail = False
 

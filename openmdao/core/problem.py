@@ -575,20 +575,22 @@ class Problem(object):
             for j in strong[i]:
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
-                temp_comp_group.ln_solver = DirectSolver()
+                # if self.root._subsystems[j].d_poly != 1:
+                #     temp_comp_group.ln_solver = DirectSolver()
                 temp_group.add(j, temp_comp_group, promotes=['*'])
 
             temp_group.nl_solver = Newton()
             temp_group.nl_solver.options['solve_subsystems'] = False
             temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
-            temp_group.nl_solver.options['maxiter'] = temp_maxiter
-            temp_group.ln_solver = PetscKSP()
-            # temp_group.ln_solver.options['atol'] = 10e-8
-            # temp_group.ln_solver.options['rtol'] = temp_rtol
-            temp_group.ln_solver.options['maxiter'] = temp_maxiter
-            temp_group.ln_solver.preconditioner = LinearGaussSeidel()
-            temp_group.ln_solver.preconditioner.options['maxiter'] = 1
+            temp_group.nl_solver.options['maxiter'] = 30 #temp_maxiter
+            if len(strong[i]) != 1:
+                temp_group.ln_solver = PetscKSP()
+                # temp_group.ln_solver.options['atol'] = 10e-8
+                # temp_group.ln_solver.options['rtol'] = temp_rtol
+                temp_group.ln_solver.options['maxiter'] = temp_maxiter
+                temp_group.ln_solver.preconditioner = LinearGaussSeidel()
+                temp_group.ln_solver.preconditioner.options['maxiter'] = 1
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
             exec('auto_group%d = temp_group' %(i + 1))
         print()
@@ -657,27 +659,32 @@ class Problem(object):
         print("\nAuto-grouping:", len(strong), "group(s) will be created.")
 
         for i in xrange(len(strong)):
+            
+            if len(strong[i]) == 1:
+                nlgs_maxiter = 1
+            else:
+                nlgs_maxiter = 200
 
             temp_group = Group()
             for j in strong[i]:
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
-                temp_comp_group.ln_solver = DirectSolver()
                 if self.root._subsystems[j].d_poly == 1:
                     temp_comp_group.nl_solver = RunOnce()
                 else:
+                    # temp_comp_group.ln_solver = DirectSolver()
                     temp_comp_group.nl_solver = Newton()
                     temp_comp_group.nl_solver.options['solve_subsystems'] = False
                     temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
                     temp_comp_group.nl_solver.options['rtol'] = temp_rtol
-                    temp_comp_group.nl_solver.options['maxiter'] = 100
+                    temp_comp_group.nl_solver.options['maxiter'] = 30
                 temp_group.add(j, temp_comp_group, promotes=['*'])
 
             temp_group.nl_solver = NLGaussSeidel()
             # temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
             temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
-            temp_group.nl_solver.options['maxiter'] = temp_maxiter
+            temp_group.nl_solver.options['maxiter'] = nlgs_maxiter
             temp_group.nl_solver.options['use_aitken'] = temp_aitken_option
             temp_group.nl_solver.options['aitken_alpha_min'] = temp_aitken_min
             temp_group.nl_solver.options['aitken_alpha_max'] = temp_aitken_max
@@ -755,17 +762,19 @@ class Problem(object):
             for j in strong[i]:
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
-                temp_comp_group.ln_solver = DirectSolver()
-                temp_comp_group.nl_solver = Newton()
-                temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
-                temp_comp_group.nl_solver.options['rtol'] = temp_rtol
-                temp_comp_group.nl_solver.options['maxiter'] = 100
+                if self.root._subsystems[j].d_poly == 1:
+                    temp_comp_group.nl_solver = RunOnce()
+                else:
+                    # temp_comp_group.ln_solver = DirectSolver()
+                    temp_comp_group.nl_solver = Newton()
+                    temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
+                    temp_comp_group.nl_solver.options['rtol'] = temp_rtol
+                    temp_comp_group.nl_solver.options['maxiter'] = 30
                 temp_group.add(j, temp_comp_group, promotes=['*'])
 
             temp_group.nl_solver = HybridGSNewton()
             temp_group.nl_solver.nlgs.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.nlgs.options['rtol'] = temp_rtol
-            temp_group.nl_solver.nlgs.options['maxiter'] = 4
             temp_group.nl_solver.nlgs.options['use_aitken'] = temp_aitken_option
             temp_group.nl_solver.nlgs.options['aitken_alpha_min'] = temp_aitken_min
             temp_group.nl_solver.nlgs.options['aitken_alpha_max'] = temp_aitken_max
@@ -773,12 +782,14 @@ class Problem(object):
             temp_group.nl_solver.newton.options['rtol'] = temp_rtol
             temp_group.nl_solver.newton.options['maxiter'] = temp_maxiter
             
-            temp_group.ln_solver = PetscKSP()
-            # temp_group.ln_solver.options['atol'] = 10e-8
-            # temp_group.ln_solver.options['rtol'] = temp_rtol
-            temp_group.ln_solver.options['maxiter'] = temp_maxiter
-            temp_group.ln_solver.preconditioner = LinearGaussSeidel()
-            temp_group.ln_solver.preconditioner.options['maxiter'] = 1
+            if len(strong[i]) != 1:
+                temp_group.ln_solver = PetscKSP()
+                # temp_group.ln_solver.options['atol'] = 10e-8
+                # temp_group.ln_solver.options['rtol'] = temp_rtol
+                temp_group.ln_solver.options['maxiter'] = temp_maxiter
+                temp_group.ln_solver.preconditioner = LinearGaussSeidel()
+                temp_group.ln_solver.preconditioner.options['maxiter'] = 1
+
             
             # temp_group.ln_solver.options['maxiter'] = temp_maxiter
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
@@ -852,15 +863,15 @@ class Problem(object):
             for j in strong[i]:
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
-                temp_comp_group.ln_solver = DirectSolver()
                 if self.root._subsystems[j].d_poly == 1:
                     temp_comp_group.nl_solver = RunOnce()
                 else:
+                    # temp_comp_group.ln_solver = DirectSolver()
                     temp_comp_group.nl_solver = Newton()
                     temp_comp_group.nl_solver.options['solve_subsystems'] = False
                     temp_comp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)
                     temp_comp_group.nl_solver.options['rtol'] = temp_rtol
-                    temp_comp_group.nl_solver.options['maxiter'] = 100
+                    temp_comp_group.nl_solver.options['maxiter'] = 30
                 temp_group.add(j, temp_comp_group, promotes=['*'])
 
             temp_group.nl_solver = Newton()
@@ -868,12 +879,14 @@ class Problem(object):
             temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
-            temp_group.ln_solver = PetscKSP()
-            # temp_group.ln_solver.options['atol'] = 10e-8
-            # temp_group.ln_solver.options['rtol'] = temp_rtol
-            temp_group.ln_solver.options['maxiter'] = temp_maxiter
-            temp_group.ln_solver.preconditioner = LinearGaussSeidel()
-            temp_group.ln_solver.preconditioner.options['maxiter'] = 1
+            if len(strong[i]) != 1:
+                temp_group.ln_solver = PetscKSP()
+                # temp_group.ln_solver.options['atol'] = 10e-8
+                # temp_group.ln_solver.options['rtol'] = temp_rtol
+                temp_group.ln_solver.options['maxiter'] = temp_maxiter
+                temp_group.ln_solver.preconditioner = LinearGaussSeidel()
+                temp_group.ln_solver.preconditioner.options['maxiter'] = 1
+
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
             exec('auto_group%d = temp_group' %(i + 1))
         print()
