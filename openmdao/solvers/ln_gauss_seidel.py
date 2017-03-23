@@ -98,6 +98,7 @@ class LinearGaussSeidel(LinearSolver):
         gs_outputs = system._get_gs_outputs(mode, self._vois)
         relevance = system._probdata.relevance
         iprint = self.options['iprint']
+        iprint = 0
         fwd = mode == 'fwd'
 
         system.clear_dparams()

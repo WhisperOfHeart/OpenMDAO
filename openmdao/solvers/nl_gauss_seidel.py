@@ -8,6 +8,8 @@ from openmdao.core.system import AnalysisError
 from openmdao.solvers.solver_base import error_wrap_nl, NonLinearSolver
 from openmdao.util.record_util import update_local_meta, create_local_meta
 
+import time
+
 
 class NLGaussSeidel(NonLinearSolver):
     """ Nonlinear Gauss Seidel solver. This is the default solver for a
@@ -105,6 +107,9 @@ class NLGaussSeidel(NonLinearSolver):
         maxiter = self.options['maxiter']
         iprint = self.options['iprint']
         unknowns_cache = self.unknowns_cache
+        
+        self.start_time = time.time()
+        self.elapsed_time = time.time() - self.start_time
 
         # Initial run
         self.iter_count = 1
@@ -139,7 +144,8 @@ class NLGaussSeidel(NonLinearSolver):
                 normval > atol and \
                 normval/basenorm > rtol  and \
                 u_norm > utol and \
-                normval < 1e13:
+                normval < 1e13 and \
+                self.elapsed_time < 1200:
 
             # Metadata update
             self.iter_count += 1
@@ -201,6 +207,7 @@ class NLGaussSeidel(NonLinearSolver):
                     # by the following vector
                     self.delta_u_n_1 = unknowns.vec - unknowns_cache 
 
+            self.elapsed_time = time.time() - self.start_time
 
             ################################################################
             # End of code added by Shamsheer Chauhan
@@ -215,10 +222,10 @@ class NLGaussSeidel(NonLinearSolver):
             self.print_norm(self.print_name, system, self.iter_count, normval,
                             basenorm, u_norm=u_norm)
 
-        if self.iter_count >= maxiter or isnan(normval) or normval >= 1e13:
+        if self.iter_count >= maxiter or isnan(normval) or normval >= 1e13 or self.elapsed_time > 1200:
             msg = 'FAILED to converge after %d iterations' % self.iter_count
             fail = True
-            if normval >= 1e13:
+            if normval >= 1e13 or self.elapsed_time > 1200:
                 exit()
         else:
             fail = False

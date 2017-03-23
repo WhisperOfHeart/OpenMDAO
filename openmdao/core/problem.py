@@ -565,6 +565,8 @@ class Problem(object):
             graph = grp._get_sys_graph()
             no_of_components = nx.number_of_nodes(graph)
             strong = [s for s in nx.strongly_connected_components(graph)]
+        for i in strong[0]:
+            tot_n_vars = self.root._subsystems[i].total_n_vars * 1.; print("There are ", tot_n_vars, "vars in total") 
 
         print("##############################################")
         print("\nAuto-grouping:", len(strong), "group(s) will be created.")
@@ -572,26 +574,31 @@ class Problem(object):
         for i in xrange(len(strong)):
 
             temp_group = Group()
+            temp_group_var_count = 0
             for j in strong[i]:
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
                 # if self.root._subsystems[j].d_poly != 1:
                 #     temp_comp_group.ln_solver = DirectSolver()
                 temp_group.add(j, temp_comp_group, promotes=['*'])
+                temp_group_var_count += self.root._subsystems[j].n_vars[self.root._subsystems[j].ci - 1]
 
             temp_group.nl_solver = Newton()
             temp_group.nl_solver.options['solve_subsystems'] = False
-            temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            # temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.options['atol'] = float(temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = 30 #temp_maxiter
             if len(strong[i]) != 1:
                 temp_group.ln_solver = PetscKSP()
                 # temp_group.ln_solver.options['atol'] = 10e-8
                 # temp_group.ln_solver.options['rtol'] = temp_rtol
-                temp_group.ln_solver.options['maxiter'] = temp_maxiter
+                temp_group.ln_solver.options['maxiter'] = 50
                 temp_group.ln_solver.preconditioner = LinearGaussSeidel()
                 temp_group.ln_solver.preconditioner.options['maxiter'] = 1
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
+            print("the atol for this group is ", temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
+            print("the n_vars for this group is", temp_group_var_count)
             exec('auto_group%d = temp_group' %(i + 1))
         print()
 
@@ -654,7 +661,9 @@ class Problem(object):
             graph = grp._get_sys_graph()
             no_of_components = nx.number_of_nodes(graph)
             strong = [s for s in nx.strongly_connected_components(graph)]
-
+        for i in strong[0]:
+            tot_n_vars = self.root._subsystems[i].total_n_vars * 1.; print("There are ", tot_n_vars, "vars in total") 
+            
         print("##############################################")
         print("\nAuto-grouping:", len(strong), "group(s) will be created.")
 
@@ -666,6 +675,7 @@ class Problem(object):
                 nlgs_maxiter = 200
 
             temp_group = Group()
+            temp_group_var_count = 0
             for j in strong[i]:
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
@@ -679,10 +689,12 @@ class Problem(object):
                     temp_comp_group.nl_solver.options['rtol'] = temp_rtol
                     temp_comp_group.nl_solver.options['maxiter'] = 30
                 temp_group.add(j, temp_comp_group, promotes=['*'])
+                temp_group_var_count += self.root._subsystems[j].n_vars[self.root._subsystems[j].ci - 1]
 
             temp_group.nl_solver = NLGaussSeidel()
             # temp_group.nl_solver.options['atol'] = temp_atol/(len(strong)**0.5)
-            temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            # temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.options['atol'] = float(temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = nlgs_maxiter
             temp_group.nl_solver.options['use_aitken'] = temp_aitken_option
@@ -690,6 +702,8 @@ class Problem(object):
             temp_group.nl_solver.options['aitken_alpha_max'] = temp_aitken_max
             temp_group.ln_solver.options['maxiter'] = temp_maxiter
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
+            print("the atol for this group is ", temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
+            print("the n_vars for this group is", temp_group_var_count)
             exec('auto_group%d = temp_group' %(i + 1))
         print()
 
@@ -697,7 +711,7 @@ class Problem(object):
         self.root.nl_solver = NLGaussSeidel()
         self.root.nl_solver.options['atol'] = temp_atol
         self.root.nl_solver.options['rtol'] = temp_rtol
-        self.root.nl_solver.options['maxiter'] = 2
+        self.root.nl_solver.options['maxiter'] = 1
         for i in xrange(len(strong)):
             self.root.add('auto_group'+str(i + 1),
             eval('auto_group%d' %(i + 1)), promotes=['*'])
@@ -752,6 +766,8 @@ class Problem(object):
             graph = grp._get_sys_graph()
             no_of_components = nx.number_of_nodes(graph)
             strong = [s for s in nx.strongly_connected_components(graph)]
+        for i in strong[0]:
+            tot_n_vars = self.root._subsystems[i].total_n_vars * 1.; print("There are ", tot_n_vars, "vars in total") 
 
         print("##############################################")
         print("\nAuto-grouping:", len(strong), "group(s) will be created.")
@@ -759,6 +775,7 @@ class Problem(object):
         for i in xrange(len(strong)):
 
             temp_group = Group()
+            temp_group_var_count = 0
             for j in strong[i]:
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
@@ -771,28 +788,32 @@ class Problem(object):
                     temp_comp_group.nl_solver.options['rtol'] = temp_rtol
                     temp_comp_group.nl_solver.options['maxiter'] = 30
                 temp_group.add(j, temp_comp_group, promotes=['*'])
+                temp_group_var_count += self.root._subsystems[j].n_vars[self.root._subsystems[j].ci - 1]
 
             temp_group.nl_solver = HybridGSNewton()
-            temp_group.nl_solver.nlgs.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            # temp_group.nl_solver.nlgs.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.options['atol'] = float(temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
             temp_group.nl_solver.nlgs.options['rtol'] = temp_rtol
             temp_group.nl_solver.nlgs.options['use_aitken'] = temp_aitken_option
             temp_group.nl_solver.nlgs.options['aitken_alpha_min'] = temp_aitken_min
             temp_group.nl_solver.nlgs.options['aitken_alpha_max'] = temp_aitken_max
-            temp_group.nl_solver.newton.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            # temp_group.nl_solver.newton.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.options['atol'] = float(temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
             temp_group.nl_solver.newton.options['rtol'] = temp_rtol
             temp_group.nl_solver.newton.options['maxiter'] = temp_maxiter
-            
-            if len(strong[i]) != 1:
+            if len(strong[i]) != 1:            
                 temp_group.ln_solver = PetscKSP()
                 # temp_group.ln_solver.options['atol'] = 10e-8
                 # temp_group.ln_solver.options['rtol'] = temp_rtol
-                temp_group.ln_solver.options['maxiter'] = temp_maxiter
+                temp_group.ln_solver.options['maxiter'] = 50
                 temp_group.ln_solver.preconditioner = LinearGaussSeidel()
                 temp_group.ln_solver.preconditioner.options['maxiter'] = 1
 
             
             # temp_group.ln_solver.options['maxiter'] = temp_maxiter
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
+            print("the atol for this group is ", temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
+            print("the n_vars for this group is", temp_group_var_count)
             exec('auto_group%d = temp_group' %(i + 1))
         print()
 
@@ -853,6 +874,8 @@ class Problem(object):
             graph = grp._get_sys_graph()
             no_of_components = nx.number_of_nodes(graph)
             strong = [s for s in nx.strongly_connected_components(graph)]
+        for i in strong[0]:
+            tot_n_vars = self.root._subsystems[i].total_n_vars * 1.; print("There are ", tot_n_vars, "vars in total") 
 
         print("##############################################")
         print("\nAuto-grouping:", len(strong), "group(s) will be created.")
@@ -860,6 +883,7 @@ class Problem(object):
         for i in xrange(len(strong)):
 
             temp_group = Group()
+            temp_group_var_count = 0
             for j in strong[i]:
                 temp_comp_group = Group()
                 temp_comp_group.add(j, self.root._subsystems[j], promotes=['*'])
@@ -873,21 +897,25 @@ class Problem(object):
                     temp_comp_group.nl_solver.options['rtol'] = temp_rtol
                     temp_comp_group.nl_solver.options['maxiter'] = 30
                 temp_group.add(j, temp_comp_group, promotes=['*'])
+                temp_group_var_count += self.root._subsystems[j].n_vars[self.root._subsystems[j].ci - 1]
 
             temp_group.nl_solver = Newton()
             temp_group.nl_solver.options['solve_subsystems'] = True
-            temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            # temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.options['atol'] = float(temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
             temp_group.nl_solver.options['rtol'] = temp_rtol
             temp_group.nl_solver.options['maxiter'] = temp_maxiter
             if len(strong[i]) != 1:
                 temp_group.ln_solver = PetscKSP()
                 # temp_group.ln_solver.options['atol'] = 10e-8
                 # temp_group.ln_solver.options['rtol'] = temp_rtol
-                temp_group.ln_solver.options['maxiter'] = temp_maxiter
+                temp_group.ln_solver.options['maxiter'] = 50
                 temp_group.ln_solver.preconditioner = LinearGaussSeidel()
                 temp_group.ln_solver.preconditioner.options['maxiter'] = 1
 
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
+            print("the atol for this group is ", temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
+            print("the n_vars for this group is", temp_group_var_count)
             exec('auto_group%d = temp_group' %(i + 1))
         print()
 
