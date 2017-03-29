@@ -672,7 +672,7 @@ class Problem(object):
             if len(strong[i]) == 1:
                 nlgs_maxiter = 1
             else:
-                nlgs_maxiter = 200
+                nlgs_maxiter = temp_maxiter
 
             temp_group = Group()
             temp_group_var_count = 0
