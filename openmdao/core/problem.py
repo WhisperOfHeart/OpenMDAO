@@ -489,21 +489,27 @@ class Problem(object):
             graph = grp._get_sys_graph()
             no_of_components = nx.number_of_nodes(graph)
             strong = [s for s in nx.strongly_connected_components(graph)]
+        for i in strong[0]:
+            tot_n_vars = self.root._subsystems[i].total_n_vars * 1.; print("There are ", tot_n_vars, "vars in total") 
 
         print("##############################################")
         print("\nAuto-grouping:", len(strong), "group(s) will be created.")
 
         for i in xrange(len(strong)):
             temp_group = Group()
+            temp_group_var_count = 0
             for j in strong[i]:
                 temp_group.add(j, self.root._subsystems[j], promotes=['*'])
+                temp_group_var_count += self.root._subsystems[j].n_vars[self.root._subsystems[j].ci - 1]
 
             temp_group.nl_solver = Newton()
             temp_group.nl_solver.options['solve_subsystems'] = False
-            temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            # temp_group.nl_solver.options['atol'] = temp_atol/(no_of_components**0.5)*(len(strong[i])**0.5)
+            temp_group.nl_solver.options['atol'] = float(temp_atol/(tot_n_vars**0.5)*(temp_group_var_count**0.5))
             temp_group.nl_solver.options['rtol'] = temp_rtol
-            temp_group.nl_solver.options['maxiter'] = temp_maxiter
+            temp_group.nl_solver.options['maxiter'] = 30#temp_maxiter
             temp_group.ln_solver = DirectSolver()
+            temp_group.ln_solver.options['jacobian_method'] = 'assemble'
             print("Group", 'auto_group%d' %(i + 1), "contains:", strong[i])
             exec('auto_group%d = temp_group' %(i + 1))
         print()
