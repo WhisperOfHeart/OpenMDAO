@@ -6,6 +6,9 @@ from collections import OrderedDict
 
 import numpy as np
 from scipy.linalg import lu_factor, lu_solve
+import scipy.sparse # Shamsheer added
+import scipy.sparse.linalg
+import time
 
 from openmdao.solvers.solver_base import MultLinearSolver
 
@@ -57,6 +60,8 @@ class DirectSolver(MultLinearSolver):
         self.jacobian = None
         self.lup = None
         self.mode = None
+        
+        self.counter = 0 # Shamsheer added
 
     def setup(self, system):
         """ Initialization. Allocate Jacobian and set up some helpers.
@@ -136,4 +141,99 @@ class DirectSolver(MultLinearSolver):
             sol_buf[voi] = deriv
 
         return sol_buf
-
+        
+    #FOR COUPLING STRENGTH 
+    # def solve(self, rhs_mat, system, mode):
+    #     """ Solves the linear system for the problem in self.system. The
+    #     full solution vector is returned.
+    # 
+    #     Args
+    #     ----
+    #     rhs_mat : dict of ndarray
+    #         Dictionary containing one ndarry per top level quantity of
+    #         interest. Each array contains the right-hand side for the linear
+    #         solve.
+    # 
+    #     system : `System`
+    #         Parent `System` object.
+    # 
+    #     mode : string
+    #         Derivative mode, can be 'fwd' or 'rev'.
+    # 
+    #     Returns
+    #     -------
+    #     dict of ndarray : Solution vectors
+    #     """
+    # 
+    #     self.system = system
+    # 
+    #     if self.mode is None:
+    #         self.mode = mode
+    # 
+    #     sol_buf = OrderedDict()
+    # 
+    #     for voi, rhs in rhs_mat.items():
+    #         self.voi = None
+    # 
+    #         if system._jacobian_changed:
+    #             method = self.options['jacobian_method']
+    # 
+    #             # Must clear the jacobian if we switch modes
+    #             if method == 'assemble' and self.mode != mode:
+    #                 self.setup(system)
+    #             self.mode = mode
+    # 
+    #             self.jacobian, _, sizelist, end_list = system.assemble_jacobian(mode=mode, method=method,
+    #                                                         mult=self.mult)
+    #             system._jacobian_changed = False
+    #             # print(system.list_auto_order()); exit()
+    # 
+    #         #     if self.options['solve_method'] == 'LU':
+    #         #         self.lup = lu_factor(self.jacobian)
+    #         # 
+    #         # if self.options['solve_method'] == 'LU':
+    #         #     deriv = lu_solve(self.lup, rhs)
+    #         # else:
+    #         #     deriv = np.linalg.solve(self.jacobian, rhs)
+    #         
+    #         deriv = 1e-16 * np.ones(self.jacobian.shape[0])
+    #         
+    #         self.system = None
+    #         sol_buf[voi] = deriv
+    #     
+    #     if self.counter == 0:
+    #         if len(sizelist) > 1:    
+    #             self.counter += 1
+    #             
+    #             befores = list(end_list)
+    #             befores.append(0)
+    #             befores = np.array(befores, dtype=int)
+    #             
+    #             temp_jaco = scipy.sparse.lil_matrix((self.jacobian.shape[0], self.jacobian.shape[0]))
+    #             
+    #             for i in range(len(end_list)):
+    #                 temp_jaco[befores[i-1]:befores[i], 0:befores[i]] = self.jacobian[befores[i-1]:befores[i], 0:befores[i]]
+    #                 self.jacobian[befores[i-1]:befores[i], 0:befores[i]] = 0
+    #             
+    #             self.jacobian = scipy.sparse.csc_matrix(self.jacobian)
+    #             temp_jaco = scipy.sparse.csc_matrix(temp_jaco)
+    # 
+    #             A = scipy.sparse.linalg.spsolve(temp_jaco,self.jacobian)
+    #             
+    #             self.jacobian = None
+    #             jaco = None
+    #             temp_jaco = None
+    #             
+    #             A = A.toarray() 
+    #             print("eigval is", np.max(np.abs(np.linalg.eigvals(A))))
+    #             # print("eigval is", np.abs(scipy.sparse.linalg.eigs(A,k=1)[0]))
+    # 
+    #     else:
+    #         exit()
+    #     
+    #     self.jacobian = None
+    #     jaco = None
+    #     temp_jaco = None
+    # 
+    #     return sol_buf
+    # 
