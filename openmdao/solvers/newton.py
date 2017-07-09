@@ -8,6 +8,7 @@ from openmdao.core.system import AnalysisError
 from openmdao.solvers.solver_base import error_wrap_nl, NonLinearSolver
 from openmdao.util.record_util import update_local_meta, create_local_meta
 
+import time
 
 class Newton(NonLinearSolver):
     """A python Newton solver that solves a linear system to determine the
@@ -70,6 +71,12 @@ class Newton(NonLinearSolver):
 
         # We need local relevancy for Newton sub-solves
         self.rel_inputs = None
+
+        self.resids_record = []
+        
+        self.newton_time = 0
+        
+        self.doing_hybrid = False
 
     def setup(self, sub):
         """ Initialize sub solvers.
@@ -135,6 +142,8 @@ class Newton(NonLinearSolver):
         metadata : dict, optional
             Dictionary containing execution metadata (e.g. iteration coordinate).
         """
+        
+        t1 = time.time()
 
         atol = self.options['atol']
         rtol = self.options['rtol']
@@ -144,6 +153,8 @@ class Newton(NonLinearSolver):
         iprint = self.options['iprint']
         ls = self.line_search
         unknowns_cache = self.unknowns_cache
+
+        unknowns_cache[:] = unknowns.vec
 
         # Metadata setup
         self.iter_count = 0
@@ -155,7 +166,8 @@ class Newton(NonLinearSolver):
         update_local_meta(local_meta, (self.iter_count, 0))
 
         # Perform an initial run to propagate srcs to targets.
-        system.children_solve_nonlinear(local_meta)
+        if self.doing_hybrid == False:
+            system.children_solve_nonlinear(local_meta)
         system.apply_nonlinear(params, unknowns, resids)
 
         if ls:
@@ -163,6 +175,8 @@ class Newton(NonLinearSolver):
 
         f_norm = resids.norm()
         f_norm0 = f_norm
+
+        self.resids_record.append(f_norm)
 
         if iprint == 2:
             self.print_norm(self.print_name, system, 0, f_norm,
@@ -176,9 +190,13 @@ class Newton(NonLinearSolver):
         save_type = system.deriv_options['type']
         system.deriv_options.locked = False
         system.deriv_options['type'] = 'user'
+        
+        diverge_count = 0
+        should_switch = False
 
         while self.iter_count < maxiter and f_norm > atol and \
-                f_norm/f_norm0 > rtol and u_norm > utol:
+                f_norm/f_norm0 > rtol and u_norm > utol and \
+                should_switch == False:
 
             # Linearize Model with partial derivatives
             system._sys_linearize(params, unknowns, resids, total_derivs=False)
@@ -230,6 +248,9 @@ class Newton(NonLinearSolver):
             self.recorders.record_iteration(system, local_meta)
 
             f_norm = resids.norm()
+            
+            self.resids_record.append(f_norm)
+            
             u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
             if iprint == 2:
                 self.print_norm(self.print_name, system, self.iter_count,
@@ -240,6 +261,29 @@ class Newton(NonLinearSolver):
                 f_norm = ls.solve(params, unknowns, resids, system, self,
                                   alpha_scalar, alpha, base_u, base_norm,
                                   f_norm, f_norm0, metadata)
+                                  
+            t2 = time.time()
+            
+            self.newton_time = t2 - t1
+                                  
+            # if self.doing_hybrid == True and \
+            #     (self.resids_record[-1] > self.resids_record[-2]):
+                
+                # print("Newton is diverging")
+                # diverge_count += 1 
+                # 
+                # if diverge_count > 1 and (self.resids_record[-2] > self.resids_record[-3]):
+                #     should_switch = True     
+                #     unknowns.vec[:] = unknowns_cache_2
+                #     
+                # unknowns_cache_2 = unknowns_cache.copy()  
+            
+            if self.doing_hybrid == True and \
+                (self.resids_record[-1] - self.resids_record[-2]) > (10 * atol):
+                
+                print("Newton diverged with a resid norm difference > 10 * atol")
+                should_switch = True     
+                unknowns.vec[:] = unknowns_cache        
 
 
         # Final residual print if you only want the last one

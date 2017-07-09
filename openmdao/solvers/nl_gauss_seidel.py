@@ -8,6 +8,7 @@ from openmdao.core.system import AnalysisError
 from openmdao.solvers.solver_base import error_wrap_nl, NonLinearSolver
 from openmdao.util.record_util import update_local_meta, create_local_meta
 
+import time
 
 class NLGaussSeidel(NonLinearSolver):
     """ Nonlinear Gauss Seidel solver. This is the default solver for a
@@ -62,6 +63,14 @@ class NLGaussSeidel(NonLinearSolver):
         self.print_name = 'NLN_GS'
         self.delta_u_n_1 = 'None' # delta_u_n-1 for Aitken acc.
         self.aitken_alpha = 1.0 # Initial Aitken relaxation factor 
+        
+        self.resids_record = []
+        
+        self.newton_ref_time = 1e99
+        
+        self.newton_diverging = False
+        
+        self.doing_hybrid = False
 
     def setup(self, sub):
         """ Initialize this solver.
@@ -95,6 +104,11 @@ class NLGaussSeidel(NonLinearSolver):
         metadata : dict, optional
             Dictionary containing execution metadata (e.g. iteration coordinate).
         """
+        
+        self.delta_u_n_1 = 'None'
+        
+        system.apply_nonlinear(params, unknowns, resids)
+        normval = resids.norm()
 
         atol = self.options['atol']
         rtol = self.options['rtol']
@@ -110,9 +124,15 @@ class NLGaussSeidel(NonLinearSolver):
         local_meta = create_local_meta(metadata, system.pathname)
         system.ln_solver.local_meta = local_meta
         update_local_meta(local_meta, (self.iter_count,))
+        
+        # unknowns_cache = np.zeros(unknowns.vec.shape)
+        unknowns_cache[:] = unknowns.vec
 
         # Initial Solve
         system.children_solve_nonlinear(local_meta)
+        # time.sleep(.1)
+        self.initial_unknowns = unknowns_cache.copy()
+        self.initial_unknowns[:] = unknowns.vec
 
         self.recorders.record_iteration(system, local_meta)
 
@@ -121,21 +141,29 @@ class NLGaussSeidel(NonLinearSolver):
             return
 
         resids = system.resids
-        unknowns_cache = np.zeros(unknowns.vec.shape)
 
         # Evaluate Norm
         system.apply_nonlinear(params, unknowns, resids)
         normval = resids.norm()
         basenorm = normval if normval > atol else 1.0
         u_norm = 1.0e99
+        
+        self.resids_record.append(normval)
 
         if iprint == 2:
             self.print_norm(self.print_name, system, 1, normval, basenorm)
+            
+        self.newton_recheck = False
 
         while self.iter_count < maxiter and \
                 normval > atol and \
                 normval/basenorm > rtol  and \
-                u_norm > utol:
+                u_norm > utol and \
+                self.newton_recheck == False:
+            
+            t1 = time.time()
+                
+            # time.sleep(.1)
 
             # Metadata update
             self.iter_count += 1
@@ -168,6 +196,7 @@ class NLGaussSeidel(NonLinearSolver):
 
                     delta_u_n = unknowns.vec - unknowns_cache
                     delta_u_n_1 = self.delta_u_n_1
+                    # print("ratio is", np.linalg.norm(delta_u_n) / np.linalg.norm(delta_u_n_1) )
 
                     # Compute relaxation factor 
                     self.aitken_alpha = self.aitken_alpha * \
@@ -190,10 +219,35 @@ class NLGaussSeidel(NonLinearSolver):
                     # Initially self.delta_u_n_1 is a string then it is replaced
                     # by the following vector
                     self.delta_u_n_1 = unknowns.vec - unknowns_cache 
+            
+            system.apply_nonlinear(params, unknowns, resids)       
+            normval = resids.norm() 
+            self.resids_record.append(normval)
+            
 
             if iprint == 2:
                 self.print_norm(self.print_name, system, self.iter_count, normval,
                                 basenorm, u_norm=u_norm)
+            
+            t2 = time.time()
+            if self.doing_hybrid == True and self.iter_count%10 == 0:
+                                
+                self.conv_const = ( self.resids_record[-1]/self.resids_record[-2] + 
+                                    self.resids_record[-2]/self.resids_record[-3] ) / 2. 
+                # predicted no of iterations remaining
+                if self.conv_const < 1.:
+                    n_iters_left = np.log10(atol / normval) / np.log10(self.conv_const)
+                    
+                    # estimated time remaining
+                    est_time = (int(n_iters_left) + 1) * (t2 - t1)
+                    
+                    if (est_time > 2 * self.newton_ref_time):    
+                        print("Time to check newton again")
+                        self.newton_recheck = True
+                
+                else :
+                    print("Time to check newton again")
+                    self.newton_recheck = True
 
         # Final residual print if you only want the last one
         if iprint == 1:
