@@ -71,6 +71,8 @@ class NLGaussSeidel(NonLinearSolver):
         self.newton_diverging = False
         
         self.doing_hybrid = False
+        
+        self.stall_detect = True
 
     def setup(self, sub):
         """ Initialize this solver.
@@ -106,6 +108,7 @@ class NLGaussSeidel(NonLinearSolver):
         """
         
         self.delta_u_n_1 = 'None'
+        self.stall_flag = False
         
         system.apply_nonlinear(params, unknowns, resids)
         normval = resids.norm()
@@ -247,6 +250,14 @@ class NLGaussSeidel(NonLinearSolver):
                 
                 else :
                     print("Time to check newton again")
+                    self.newton_recheck = True
+                    
+            if self.stall_detect == True and self.iter_count > 6:
+                
+                if np.mean(self.resids_record[-3:]) > np.mean(self.resids_record[-6:-3]):
+                # if self.resids_record[-1] > self.resids_record[-6]:
+                    
+                    self.stall_flag = True
                     self.newton_recheck = True
 
         # Final residual print if you only want the last one

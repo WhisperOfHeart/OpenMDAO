@@ -26,7 +26,7 @@ class HybridGSNewton(NonLinearSolver):
         self.nlgs.doing_hybrid = True
 
         self.newton = Newton()
-        self.newton.options['solve_subsystems'] = False   
+        # self.newton.options['solve_subsystems'] = False   
         self.newton.doing_hybrid = True     
 
     def setup(self, sub):
@@ -77,6 +77,7 @@ class HybridGSNewton(NonLinearSolver):
 
         # Flag used later if need to recheck Newton mid nlgs
         self.nlgs.newton_recheck = False
+        stalled = False
 
         # Set the number of remaining iterations for each solver type
         self.nlgs_maxiter = self.options['maxiter_nlgs']
@@ -178,17 +179,24 @@ class HybridGSNewton(NonLinearSolver):
             
             unknowns_cache[:] = unknowns.vec
             self.nlgs_maxiter -= self.nlgs.iter_count # update iteration limit
+            if self.nlgs.stall_flag == True and resids.norm() < 10*self.options['atol']:
+                stalled = True
         
         # This point is reached if Newton is initially better or if the Newton 
-        # performance is being rechecked in between nlgs iterations    
-        while resids.norm() > self.options['atol'] and self.nlgs_maxiter > 0 \
-            and self.newton_maxiter > 0:
+        # performance is being rechecked in between nlgs iterations
             
-            if self.nlgs.newton_recheck == False:
+        while resids.norm() > self.options['atol'] and self.nlgs_maxiter > 0 \
+            and self.newton_maxiter > 0 and stalled == False:
+            
+            if self.nlgs.newton_recheck == False or self.nlgs.stall_flag == True:
             
                 print("SWITCHING TO NEWTON")
                 self.newton.options['maxiter'] = self.newton_maxiter
                 self.newton.solve(params, unknowns, resids, system, metadata)
+                
+                if self.newton.stall_flag == True:
+                    stalled = True
+                
                 self.nlgs.newton_diverging = True 
                 
                 self.newton_maxiter -= self.newton.iter_count # update the iteration limit     
@@ -233,7 +241,7 @@ class HybridGSNewton(NonLinearSolver):
                     newton_rate = 0
 
 
-            if resids.norm() > self.options['atol']:
+            if resids.norm() > self.options['atol'] and stalled == False:
                 
                 if gs_rate > newton_rate or self.nlgs.newton_diverging:
                 
@@ -245,6 +253,8 @@ class HybridGSNewton(NonLinearSolver):
                     self.nlgs.solve(params, unknowns, resids, system, metadata)
                     unknowns_cache[:] = unknowns.vec
                     self.nlgs_maxiter -= self.nlgs.iter_count # update the iteration limit
+                    if self.nlgs.stall_flag == True and resids.norm() < 10*self.options['atol']:
+                        stalled = True
                     
                 else:
                     self.nlgs.newton_recheck = False

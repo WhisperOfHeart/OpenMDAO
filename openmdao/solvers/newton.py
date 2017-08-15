@@ -77,6 +77,8 @@ class Newton(NonLinearSolver):
         self.newton_time = 0
         
         self.doing_hybrid = False
+        
+        self.stall_detect = True
 
     def setup(self, sub):
         """ Initialize sub solvers.
@@ -155,6 +157,7 @@ class Newton(NonLinearSolver):
         unknowns_cache = self.unknowns_cache
 
         unknowns_cache[:] = unknowns.vec
+        self.stall_flag = False
 
         # Metadata setup
         self.iter_count = 0
@@ -283,7 +286,18 @@ class Newton(NonLinearSolver):
                 
                 print("Newton diverged with a resid norm difference > 10 * atol")
                 should_switch = True     
-                unknowns.vec[:] = unknowns_cache        
+                unknowns.vec[:] = unknowns_cache   
+                
+            # if self.stall_detect == True and self.iter_count > 4:
+            elif self.stall_detect == True:
+
+                # if np.mean(self.resids_record[-2:]) > np.mean(self.resids_record[-4:-2]):
+                if self.resids_record[-1] > self.resids_record[-2]:
+                    print("Newton stall detected")
+                    
+                    self.stall_flag = True 
+                    should_switch = True
+                    unknowns.vec[:] = unknowns_cache    
 
 
         # Final residual print if you only want the last one
