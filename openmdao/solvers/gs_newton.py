@@ -78,6 +78,7 @@ class HybridGSNewton(NonLinearSolver):
         # Flag used later if need to recheck Newton mid nlgs
         self.nlgs.newton_recheck = False
         stalled = False
+        self.nlgs.newton_diverging = False
 
         # Set the number of remaining iterations for each solver type
         self.nlgs_maxiter = self.options['maxiter_nlgs']

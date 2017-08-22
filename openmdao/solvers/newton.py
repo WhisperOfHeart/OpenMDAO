@@ -78,7 +78,7 @@ class Newton(NonLinearSolver):
         
         self.doing_hybrid = False
         
-        self.stall_detect = True
+        self.stall_detect = False
 
     def setup(self, sub):
         """ Initialize sub solvers.
