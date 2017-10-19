@@ -268,25 +268,14 @@ class Newton(NonLinearSolver):
             t2 = time.time()
             
             self.newton_time = t2 - t1
-                                  
-            # if self.doing_hybrid == True and \
-            #     (self.resids_record[-1] > self.resids_record[-2]):
-                
-                # print("Newton is diverging")
-                # diverge_count += 1 
-                # 
-                # if diverge_count > 1 and (self.resids_record[-2] > self.resids_record[-3]):
-                #     should_switch = True     
-                #     unknowns.vec[:] = unknowns_cache_2
-                #     
-                # unknowns_cache_2 = unknowns_cache.copy()  
             
             if self.doing_hybrid == True and \
                 (self.resids_record[-1] - self.resids_record[-2]) > (10 * atol):
                 
                 print("Newton diverged with a resid norm difference > 10 * atol")
                 should_switch = True     
-                unknowns.vec[:] = unknowns_cache   
+                if self.nlgs_maxiter > 0:
+                    unknowns.vec[:] = unknowns_cache   
                 
             # if self.stall_detect == True and self.iter_count > 4:
             elif self.stall_detect == True:

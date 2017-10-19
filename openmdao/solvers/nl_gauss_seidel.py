@@ -73,6 +73,8 @@ class NLGaussSeidel(NonLinearSolver):
         self.doing_hybrid = False
         
         self.stall_detect = False
+        
+        self.done_initial_solve = False
 
     def setup(self, sub):
         """ Initialize this solver.
@@ -132,7 +134,11 @@ class NLGaussSeidel(NonLinearSolver):
         unknowns_cache[:] = unknowns.vec
 
         # Initial Solve
+        # if self.done_initial_solve == False:
         system.children_solve_nonlinear(local_meta)
+        delta_u_n = unknowns.vec - unknowns_cache
+        unknowns.vec[:] = unknowns_cache + self.aitken_alpha * delta_u_n
+            # self.done_initial_solve == True
         # time.sleep(.1)
         self.initial_unknowns = unknowns_cache.copy()
         self.initial_unknowns[:] = unknowns.vec
@@ -166,7 +172,7 @@ class NLGaussSeidel(NonLinearSolver):
             
             t1 = time.time()
                 
-            # time.sleep(.1)
+            # time.sleep(.02)
 
             # Metadata update
             self.iter_count += 1
@@ -176,6 +182,9 @@ class NLGaussSeidel(NonLinearSolver):
             # Runs an iteration
             system.children_solve_nonlinear(local_meta)
             self.recorders.record_iteration(system, local_meta)
+            if type(self.delta_u_n_1) is str:
+                delta_u_n = unknowns.vec - unknowns_cache
+                unknowns.vec[:] = unknowns_cache + self.aitken_alpha * delta_u_n
 
             # Evaluate Norm
             system.apply_nonlinear(params, unknowns, resids)
@@ -233,7 +242,9 @@ class NLGaussSeidel(NonLinearSolver):
                                 basenorm, u_norm=u_norm)
             
             t2 = time.time()
-            if self.doing_hybrid == True and self.iter_count%10 == 0:
+            # print("time", t2 - t1)
+            # if self.doing_hybrid == True and self.iter_count%10 == 0 and self.newton_maxiter > 0:
+            if self.doing_hybrid == True and normval/basenorm < 0.1 and self.newton_maxiter > 0:
                                 
                 self.conv_const = ( self.resids_record[-1]/self.resids_record[-2] + 
                                     self.resids_record[-2]/self.resids_record[-3] ) / 2. 
