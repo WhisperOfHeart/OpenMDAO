@@ -171,8 +171,6 @@ class NLGaussSeidel(NonLinearSolver):
                 self.newton_recheck == False:
             
             t1 = time.time()
-                
-            # time.sleep(.02)
 
             # Metadata update
             self.iter_count += 1
@@ -244,7 +242,7 @@ class NLGaussSeidel(NonLinearSolver):
             t2 = time.time()
             # print("time", t2 - t1)
             # if self.doing_hybrid == True and self.iter_count%10 == 0 and self.newton_maxiter > 0:
-            if self.doing_hybrid == True and normval/basenorm < 0.1 and self.newton_maxiter > 0:
+            if self.doing_hybrid == True and normval/basenorm < 0.1 and self.newton_maxiter > 0 and self.iter_count > 3:
                                 
                 self.conv_const = ( self.resids_record[-1]/self.resids_record[-2] + 
                                     self.resids_record[-2]/self.resids_record[-3] ) / 2. 
