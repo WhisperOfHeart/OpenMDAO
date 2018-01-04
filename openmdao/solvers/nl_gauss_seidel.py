@@ -119,8 +119,6 @@ class NLGaussSeidel(NonLinearSolver):
         maxiter = self.options['maxiter']
         iprint = self.options['iprint']
         unknowns_cache = self.unknowns_cache
-        
-        print("start time is",time.time())
 
         # Initial run
         self.iter_count = 1
@@ -206,7 +204,6 @@ class NLGaussSeidel(NonLinearSolver):
 
                     delta_u_n = unknowns.vec - unknowns_cache
                     delta_u_n_1 = self.delta_u_n_1
-                    # print("ratio is", np.linalg.norm(delta_u_n) / np.linalg.norm(delta_u_n_1) )
 
                     # Compute relaxation factor 
                     self.aitken_alpha = self.aitken_alpha * \
@@ -263,7 +260,6 @@ class NLGaussSeidel(NonLinearSolver):
             if self.stall_detect == True and self.iter_count > 6:
                 
                 if np.mean(self.resids_record[-3:]) > np.mean(self.resids_record[-6:-3]):
-                # if self.resids_record[-1] > self.resids_record[-6]:
                     
                     self.stall_flag = True
                     self.newton_recheck = True
