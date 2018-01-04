@@ -55,7 +55,8 @@ class HybridGSNewton(NonLinearSolver):
 
     def solve(self, params, unknowns, resids, system, metadata=None):
         """ Solves the system by selecting and switching between nonlinear 
-        Gauss-Siedel and Netwon's Method.
+        Gauss-Siedel and Netwon's Method. This was used for the automated
+        selection paper.
 
         Args
         ----
@@ -91,14 +92,14 @@ class HybridGSNewton(NonLinearSolver):
         self.nlgs.solve(params, unknowns, resids, system, metadata)
         t2 = time.time()
         
+        # No need to go further if converged 
+        if resids.norm() < self.options['atol']:
+            return
+        
         # Obtain an average time per iteration
         gs_time = (t2 - t1) / self.nlgs.options['maxiter']; print("gs_time", gs_time)
         # update iteration limit
         self.nlgs_maxiter -= self.nlgs.options['maxiter'] 
-        
-        # No need to go further if converged 
-        if resids.norm() < self.options['atol']:
-            return
         
         # This contains the residual values from self.nlgs.solve()
         # It is a list to which residual norm vals are appended
@@ -184,12 +185,11 @@ class HybridGSNewton(NonLinearSolver):
                 
                 self.nlgs.newton_diverging = True 
                 
-                self.nlgs.newton_maxiter -= self.newton.iter_count # update the iteration limit     
-                
-                # if self.nlgs_maxiter < 1:
-                #     return
+                self.nlgs.newton_maxiter -= self.newton.iter_count # update the iteration limit
                 
                 newton_rr = self.newton.resids_record # this contains the residual values
+                
+                # Exit if Newton is hopeless and we are out of NLBGS iterations
                 if newton_rr[-1] > 1e12*self.options['atol'] and self.nlgs_maxiter < 1:
                     return
 

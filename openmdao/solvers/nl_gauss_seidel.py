@@ -73,8 +73,6 @@ class NLGaussSeidel(NonLinearSolver):
         self.doing_hybrid = False
         
         self.stall_detect = False
-        
-        self.done_initial_solve = False
 
     def setup(self, sub):
         """ Initialize this solver.
@@ -121,6 +119,8 @@ class NLGaussSeidel(NonLinearSolver):
         maxiter = self.options['maxiter']
         iprint = self.options['iprint']
         unknowns_cache = self.unknowns_cache
+        
+        print("start time is",time.time())
 
         # Initial run
         self.iter_count = 1
@@ -134,12 +134,10 @@ class NLGaussSeidel(NonLinearSolver):
         unknowns_cache[:] = unknowns.vec
 
         # Initial Solve
-        # if self.done_initial_solve == False:
         system.children_solve_nonlinear(local_meta)
         delta_u_n = unknowns.vec - unknowns_cache
         unknowns.vec[:] = unknowns_cache + self.aitken_alpha * delta_u_n
-            # self.done_initial_solve == True
-        # time.sleep(.1)
+
         self.initial_unknowns = unknowns_cache.copy()
         self.initial_unknowns[:] = unknowns.vec
 
@@ -171,6 +169,8 @@ class NLGaussSeidel(NonLinearSolver):
                 self.newton_recheck == False:
             
             t1 = time.time()
+                
+            # time.sleep(.02) # uncomment this to add a pause for each iteration
 
             # Metadata update
             self.iter_count += 1
@@ -240,8 +240,7 @@ class NLGaussSeidel(NonLinearSolver):
                                 basenorm, u_norm=u_norm)
             
             t2 = time.time()
-            # print("time", t2 - t1)
-            # if self.doing_hybrid == True and self.iter_count%10 == 0 and self.newton_maxiter > 0:
+
             if self.doing_hybrid == True and normval/basenorm < 0.1 and self.newton_maxiter > 0 and self.iter_count > 3:
                                 
                 self.conv_const = ( self.resids_record[-1]/self.resids_record[-2] + 
@@ -253,7 +252,7 @@ class NLGaussSeidel(NonLinearSolver):
                     # estimated time remaining
                     est_time = (int(n_iters_left) + 1) * (t2 - t1)
                     
-                    if (est_time > 2 * self.newton_ref_time):    
+                    if (est_time > 1 * self.newton_ref_time):    
                         print("Time to check newton again")
                         self.newton_recheck = True
                 
