@@ -28,6 +28,8 @@ class HybridGSNewton(NonLinearSolver):
         self.newton = Newton()
         # self.newton.options['solve_subsystems'] = False   
         self.newton.doing_hybrid = True     
+        
+        self.status = 'None'
 
     def setup(self, sub):
         """ Initialize sub solvers.
@@ -84,6 +86,7 @@ class HybridGSNewton(NonLinearSolver):
         self.nlgs_maxiter = self.options['maxiter_nlgs']
         self.nlgs.newton_maxiter = self.options['maxiter_newton']
         self.newton.nlgs_maxiter = self.nlgs_maxiter
+        self.nlbgs_run_out_flag = False
 
         # First perform 4 iterations of NLGS and time them
         # 1 iteration for setup, the other 3 to get relaxation going
@@ -94,6 +97,7 @@ class HybridGSNewton(NonLinearSolver):
         
         # No need to go further if converged 
         if resids.norm() < self.options['atol']:
+            self.status = 'Successful'
             return
         
         # Obtain an average time per iteration
@@ -139,6 +143,9 @@ class HybridGSNewton(NonLinearSolver):
             print("Newton diverging")
             self.nlgs.newton_diverging = True
             unknowns.vec[:] = unknowns_cache
+        elif newton_rate < gs_rate:
+            self.nlgs.newton_worked = np.zeros(unknowns.vec.shape)
+            self.nlgs.newton_worked[:] = unknowns.vec
             
         while resids.norm() > self.options['atol'] and (self.nlgs_maxiter > 0 or self.nlgs.newton_maxiter > 0)\
         and stalled == False:
@@ -170,12 +177,20 @@ class HybridGSNewton(NonLinearSolver):
                 
             if resids.norm() < self.options['atol'] or (self.nlgs_maxiter <= 0 and self.nlgs.newton_maxiter <= 0)\
             or stalled == True:
-                
+                if resids.norm() < self.options['atol']:
+                    self.status = 'Successful'
+                else:
+                    self.status = 'Failed'
                 return
+            
+            if self.nlgs_maxiter < 1 and self.nlbgs_run_out_flag == False:
+                self.nlbgs_run_out_flag = True
+                unknowns.vec[:] = self.nlgs.unknowns_cache_copy
             
             if (self.nlgs.newton_recheck == False or self.nlgs.stall_flag == True) and self.nlgs.newton_maxiter > 0:
             
                 print("SWITCHING TO NEWTON")
+                self.nlgs.checked_once_while_diverging = False
                 self.newton.nlgs_maxiter = self.nlgs_maxiter
                 self.newton.options['maxiter'] = self.nlgs.newton_maxiter
                 self.newton.solve(params, unknowns, resids, system, metadata)
@@ -190,7 +205,11 @@ class HybridGSNewton(NonLinearSolver):
                 newton_rr = self.newton.resids_record # this contains the residual values
                 
                 # Exit if Newton is hopeless and we are out of NLBGS iterations
-                if newton_rr[-1] > 1e12*self.options['atol'] and self.nlgs_maxiter < 1:
+                if newton_rr[-1] > 1e14*self.options['atol'] and self.nlgs_maxiter < 1:
+                    if resids.norm() < self.options['atol']:
+                        self.status = 'Successful'
+                    else:
+                        self.status = 'Failed'
                     return
 
             elif self.nlgs.newton_maxiter > 0:
@@ -216,3 +235,9 @@ class HybridGSNewton(NonLinearSolver):
                 else:
                     print("Newton diverging after recheck")  
                     self.nlgs.newton_diverging = True
+        
+        if resids.norm() < self.options['atol']:
+            self.status = 'Successful'
+        else:
+            self.status = 'Failed'
+            

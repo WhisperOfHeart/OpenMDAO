@@ -254,6 +254,8 @@ class Newton(NonLinearSolver):
             
             self.resids_record.append(f_norm)
             
+            # print("time_Newton", f_norm, time.time())
+            
             u_norm = np.linalg.norm(unknowns.vec - unknowns_cache)
             if iprint == 2:
                 self.print_norm(self.print_name, system, self.iter_count,

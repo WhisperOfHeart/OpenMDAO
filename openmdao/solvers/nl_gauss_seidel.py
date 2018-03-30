@@ -73,6 +73,14 @@ class NLGaussSeidel(NonLinearSolver):
         self.doing_hybrid = False
         
         self.stall_detect = False
+        
+        self.newton_worked = False
+        
+        self.checked_once_while_diverging = False
+        
+        self.unknowns_cache_copy = None
+        
+        self.normval_copy = 1e99
 
     def setup(self, sub):
         """ Initialize this solver.
@@ -112,6 +120,8 @@ class NLGaussSeidel(NonLinearSolver):
         
         system.apply_nonlinear(params, unknowns, resids)
         normval = resids.norm()
+        
+        # print("time_just_entered_GS", normval, time.time())
 
         atol = self.options['atol']
         rtol = self.options['rtol']
@@ -130,6 +140,7 @@ class NLGaussSeidel(NonLinearSolver):
         
         # unknowns_cache = np.zeros(unknowns.vec.shape)
         unknowns_cache[:] = unknowns.vec
+        self.unknowns_cache_copy = unknowns_cache.copy()
 
         # Initial Solve
         system.children_solve_nonlinear(local_meta)
@@ -153,7 +164,13 @@ class NLGaussSeidel(NonLinearSolver):
         basenorm = normval if normval > atol else 1.0
         u_norm = 1.0e99
         
+        # print("time_GS", normval, time.time())
+        
         self.resids_record.append(normval)
+        
+        if normval < self.normval_copy:
+            self.unknowns_cache_copy[:] = unknowns.vec
+            self.normval_copy = normval
 
         if iprint == 2:
             self.print_norm(self.print_name, system, 1, normval, basenorm)
@@ -231,12 +248,17 @@ class NLGaussSeidel(NonLinearSolver):
             normval = resids.norm() 
             self.resids_record.append(normval)
             
+            if normval < self.normval_copy:
+                self.unknowns_cache_copy[:] = unknowns.vec
+                self.normval_copy = normval
 
             if iprint == 2:
                 self.print_norm(self.print_name, system, self.iter_count, normval,
                                 basenorm, u_norm=u_norm)
             
             t2 = time.time()
+            
+            # print("time_GS", normval, time.time())
 
             if self.doing_hybrid == True and normval/basenorm < 0.1 and self.newton_maxiter > 0 and self.iter_count > 3:
                                 
@@ -257,12 +279,29 @@ class NLGaussSeidel(NonLinearSolver):
                     print("Time to check newton again")
                     self.newton_recheck = True
                     
+            elif self.doing_hybrid == True and self.iter_count > 10:
+                if self.resids_record[-1] > self.resids_record[-10]:
+                    print("Yes res[-10] is greater than res[-1]")
+                    if self.newton_worked is not False:
+                        unknowns.vec[:] = self.newton_worked
+                        self.newton_worked = False
+                        self.newton_recheck = True
+                        print("LEAVING NLBGS, TRY NEWTON WORKED")
+                    elif self.checked_once_while_diverging is False:
+                        unknowns.vec[:] = self.unknowns_cache_copy
+                        self.checked_once_while_diverging = True
+                        self.newton_recheck = True
+                        print("LEAVING NLBGS, DIVERGING, TRY NEWTON")
+                    
             if self.stall_detect == True and self.iter_count > 6:
                 
                 if np.mean(self.resids_record[-3:]) > np.mean(self.resids_record[-6:-3]):
                     
                     self.stall_flag = True
                     self.newton_recheck = True
+
+            if normval > 1e14:
+                self.iter_count = maxiter + 1
 
         # Final residual print if you only want the last one
         if iprint == 1:
