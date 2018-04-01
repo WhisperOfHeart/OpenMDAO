@@ -282,16 +282,16 @@ class NLGaussSeidel(NonLinearSolver):
             elif self.doing_hybrid == True and self.iter_count > 10:
                 if self.resids_record[-1] > self.resids_record[-10]:
                     print("Yes res[-10] is greater than res[-1]")
-                    if self.newton_worked is not False:
-                        unknowns.vec[:] = self.newton_worked
-                        self.newton_worked = False
-                        self.newton_recheck = True
-                        print("LEAVING NLBGS, TRY NEWTON WORKED")
-                    elif self.checked_once_while_diverging is False:
+                    if self.checked_once_while_diverging is False:
                         unknowns.vec[:] = self.unknowns_cache_copy
                         self.checked_once_while_diverging = True
                         self.newton_recheck = True
                         print("LEAVING NLBGS, DIVERGING, TRY NEWTON")
+                    elif self.newton_worked is not False:
+                        unknowns.vec[:] = self.newton_worked
+                        self.newton_worked = False
+                        self.newton_recheck = True
+                        print("LEAVING NLBGS, TRY NEWTON WORKED")
                     
             if self.stall_detect == True and self.iter_count > 6:
                 
