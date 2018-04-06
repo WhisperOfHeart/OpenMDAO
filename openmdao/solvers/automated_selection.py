@@ -5,10 +5,10 @@ from openmdao.solvers.nl_gauss_seidel import NLGaussSeidel
 import numpy as np
 import time
 
-class HybridGSNewton(NonLinearSolver):
+class AutomatedSelection(NonLinearSolver):
 
     def __init__(self):
-        super(HybridGSNewton, self).__init__()
+        super(AutomatedSelection, self).__init__()
         
         opt = self.options
         opt.add_option('atol', 1e-6, lower=0.0,
